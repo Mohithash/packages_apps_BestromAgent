@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 The BestROM Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+-->
+<!--
+  Why this says true, and where the real rule lives.
+
+  With no network security config at all, a targetSdk 28 or higher app is
+  refused plain http to everything but loopback. Both LAN presets point at an
+  address on the user's own network - the configuration that sends nothing off
+  it - so without this file the option this ROM's users most want cannot
+  connect, and "The brain could not be reached." is all they are told.
+  android:usesCleartextTraffic is not the answer either: on Android 17 the
+  attribute is inert, so declaring it would suggest a protection that is not
+  there.
+
+  What this app wants to permit is "any private literal": loopback, 10/8,
+  172.16/12, 192.168/16, 100.64/10, 169.254/16 and fc00::/7. A network security
+  config cannot say that - a domain entry is a name matched by suffix, and
+  there is no CIDR form - so the base config permits cleartext and the address
+  rule stays in code, where it is checked twice before a byte leaves:
+  BrainUrl.reject refuses a plain-http base URL whose host is not a private
+  literal, and OpenAiCompatClient.send parses the endpoint with java.net.URL
+  and refuses again. A name is never private, however it is spelled.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- System CAs only. A user-installed CA has no business on the
+                 path between this app and the endpoint the user typed. -->
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

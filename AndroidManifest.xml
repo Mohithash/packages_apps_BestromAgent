@@ -28,6 +28,15 @@
   normal permission, granted at install, so the privileged allowlist is
   unchanged and still holds two entries. The adb bridge itself is still a unix
   abstract socket with no address outside the device.
+
+  networkSecurityConfig is what lets the two LAN presets connect at all; the
+  file says why it permits cleartext and where the address rule really lives.
+  usesCleartextTraffic is deliberately absent: on this API level it does
+  nothing, and an attribute that does nothing reads as a protection.
+
+  Every activity pins an empty taskAffinity. The default affinity is the
+  package name, which another app can declare as its own, and the screen that
+  starts an agent task is not a screen to share a task stack with.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -46,7 +55,9 @@
 
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault.Settings">
 
@@ -64,6 +75,7 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:permission="android.permission.WRITE_SECURE_SETTINGS"
+            android:taskAffinity=""
             android:label="@string/agent_title" />
 
         <!-- The task screen, and the assistant entry.
@@ -87,6 +99,7 @@
             android:enabled="true"
             android:exported="true"
             android:launchMode="singleTask"
+            android:taskAffinity=""
             android:label="@string/agent_task_title"
             android:theme="@android:style/Theme.DeviceDefault.Settings">
             <intent-filter>
@@ -102,6 +115,7 @@
             android:enabled="true"
             android:exported="false"
             android:launchMode="singleTop"
+            android:taskAffinity=""
             android:label="@string/brain_title"
             android:theme="@android:style/Theme.DeviceDefault.Settings" />
 

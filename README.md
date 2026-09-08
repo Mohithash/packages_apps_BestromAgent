@@ -211,21 +211,45 @@ and suggest the third:
 | OpenRouter | `https://openrouter.ai/api/v1` | `HTTP-Referer` and `X-Title` are attribution-only and are **not** sent |
 | Local llama.cpp | `http://<host>:8080/v1` | needs `--jinja` for tool calls and `--host 0.0.0.0` |
 | Local Ollama | `http://<host>:11434/v1` | needs `OLLAMA_HOST=0.0.0.0`, and does not support `tool_choice`, so the preset omits the field |
+| Custom | none; you type one | anything OpenAI-compatible. `tool_choice` is sent, `stream` is not |
 
-The two local presets are the only ones allowed to speak plain http, and only to
-a loopback, RFC1918, 100.64/10, 169.254/16 or `fc00::/7` literal. A *name* is
-never private, however it is spelled: `localhost.attacker.example` resolves
-wherever its owner says.
+Nine rows, because the LAN server is two: Ollama answers an error for
+`tool_choice` and llama.cpp accepts it, and that is the one field that changes
+the request.
+
+**The plain-http rule is about the address, not about the preset.** Any preset
+may speak plain http to a loopback, RFC1918, 100.64/10, 169.254/16 or `fc00::/7`
+literal, and no preset may speak it to anything else. A *name* is never private,
+however it is spelled: `localhost.attacker.example` resolves wherever its owner
+says. The base URL is parsed once, with `java.net.URL`, and the same object
+answers both the scheme question and the host question - a second, hand-written
+parser that ends the authority one character earlier is how a key leaves in
+cleartext to a host the check never saw. A base URL carrying `#`, `?`, `\`,
+whitespace or a user name is refused outright.
+
+Cleartext to a private address needs `res/xml/network_security_config.xml`: with
+no config the platform refuses plain http to anything but loopback, and on this
+API level `android:usesCleartextTraffic` does nothing at all. A network security
+config cannot express a CIDR range, so the base config permits cleartext and the
+address check above is the real gate. That is deliberate and the file says so.
 
 `INTERNET` is the one permission this adds. It is `normal`, so the privileged
 allowlist is unchanged - still exactly two entries. The client builds exactly one
 URL, `<baseUrl>/chat/completions`, and there is no other network code in the app.
 
+A key stored for a cloud preset is never sent to a LAN server: the two local
+presets send the placeholder `local` and nothing else, whatever is in the store
+when the preset changes.
+
 The key is sealed with an `AndroidKeyStore` AES-GCM key created with
 `setUnlockedDeviceRequired(true)`, and the ciphertext lives in the app's files
 directory. It is never logged (the `brain` package contains no logging statement
-and a gate asserts it), never audited, never rendered back into the field, and
-`allowBackup` is already false.
+and a gate asserts it), never audited and never rendered back into the field.
+`allowBackup` is false, which on Android 12 and up covers cloud backup only, so
+`dataExtractionRules` excludes the files directory from device-to-device
+transfer as well. A key that is stored and will not unseal is its own sentence -
+"unlock the phone and try again" - rather than the provider's 401 reported as a
+bad key.
 
 ## The tools
 
