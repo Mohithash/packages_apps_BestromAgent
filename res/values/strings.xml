@@ -28,6 +28,8 @@
     <string name="status_a11y_off">Accessibility  off</string>
     <string name="status_session_paired">Sessions  1 paired</string>
     <string name="status_session_none">Sessions  not paired</string>
+    <string name="status_refused_none">Refused  none</string>
+    <string name="status_refused">Refused  %1$d from other apps, %2$d before pairing</string>
 
     <string name="pairing_header">Pairing code</string>
     <string name="pairing_new_code">New code</string>

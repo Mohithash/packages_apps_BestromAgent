@@ -52,6 +52,12 @@ import org.json.JSONObject
  * and the socket lives exactly as long as the service does. Nothing here is
  * reachable from the network - the socket has no address outside the device and
  * the app holds no INTERNET permission.
+ *
+ * On the device the socket is not adbd-only. sepolicy lets any process in the
+ * same domain connect to it, and this app runs in platform_app, so every other
+ * platform-signed app can reach it. What makes it adbd-only is the peer
+ * credential check in [serve]: a connection whose uid is neither shell nor root
+ * is closed before its first line is read.
  */
 class AgentBridgeService : Service(), Methods.Host {
 
@@ -67,7 +73,21 @@ class AgentBridgeService : Service(), Methods.Host {
         const val NOTIFICATION_ID = 1
 
         const val MAX_CONNECTIONS = 4
+
+        /**
+         * How many of the four slots an unauthenticated peer may hold. Two are
+         * kept back so a peer that never pairs cannot lock the maintainer out.
+         */
+        const val MAX_UNAUTHENTICATED_CONNECTIONS = 2
+
         const val CONNECTION_IDLE_MS = 120_000
+
+        /** The deadline before a connection authenticates. Then it gets the full one. */
+        const val HANDSHAKE_IDLE_MS = 10_000
+
+        /** Requests a connection may send before pairing or authenticating. */
+        const val MAX_PREAUTH_REQUESTS = 8
+
         const val BRIDGE_IDLE_MS = Methods.IDLE_TIMEOUT_S * 1000L
         private const val IDLE_WARN_MS = 60_000L
     }
@@ -83,6 +103,8 @@ class AgentBridgeService : Service(), Methods.Host {
     private val running = AtomicBoolean(false)
     private val stopRequested = AtomicBoolean(false)
     private val connectionCount = AtomicInteger(0)
+    private val unauthenticatedCount = AtomicInteger(0)
+    private val connectionSeq = AtomicInteger(0)
     private val lastRequestMs = java.util.concurrent.atomic.AtomicLong(0)
 
     private var server: LocalServerSocket? = null
@@ -173,21 +195,46 @@ class AgentBridgeService : Service(), Methods.Host {
                     if (running.get()) Log.w(TAG, "accept failed")
                     return
                 }
+            val uid = peerUid(client)
+            if (!Peer.isAllowed(uid)) {
+                // Not adbd and not root. Nothing is written to the audit log
+                // for it: the counter on the settings screen is the record.
+                AgentState.peerRefusals.incrementAndGet()
+                Log.w(TAG, "refused a connection from uid $uid")
+                closeQuietly(client)
+                continue
+            }
             if (connectionCount.get() >= MAX_CONNECTIONS) {
-                refuse(client)
+                refuse(client, "too many connections")
+                continue
+            }
+            // Counted here rather than on the connection thread: the accept
+            // loop is one thread, so check and increment cannot interleave.
+            if (unauthenticatedCount.incrementAndGet() > MAX_UNAUTHENTICATED_CONNECTIONS) {
+                unauthenticatedCount.decrementAndGet()
+                refuse(client, "too many unauthenticated connections")
                 continue
             }
             connectionCount.incrementAndGet()
             openSockets.add(client)
-            Thread({ serve(client) }, "agent-conn").start()
+            val id = connectionSeq.incrementAndGet()
+            Thread({ serve(client, id, uid) }, "agent-conn").start()
         }
     }
 
-    private fun refuse(client: LocalSocket) {
+    /** The peer's uid, or [Peer.UID_UNKNOWN] when the kernel gives us nothing. */
+    private fun peerUid(client: LocalSocket): Int =
+        try {
+            client.peerCredentials.uid
+        } catch (e: Exception) {
+            Peer.UID_UNKNOWN
+        }
+
+    private fun refuse(client: LocalSocket, message: String) {
         try {
             Framing.writeLine(
                 client.outputStream,
-                JsonRpc.error(null, JsonRpc.INTERNAL_ERROR, "too many connections").toString(),
+                JsonRpc.error(null, JsonRpc.INTERNAL_ERROR, message).toString(),
             )
         } catch (e: Exception) {
             // The peer is going away either way.
@@ -196,10 +243,15 @@ class AgentBridgeService : Service(), Methods.Host {
         }
     }
 
-    private fun serve(client: LocalSocket) {
+    private fun serve(client: LocalSocket, connectionId: Int, peerUid: Int) {
         val session = Methods.Session()
+        session.connectionId = connectionId
+        session.peerUid = peerUid
+        var holdingUnauthenticatedSlot = true
         try {
-            client.soTimeout = CONNECTION_IDLE_MS
+            // Short until the peer authenticates, so an idle handshake cannot
+            // sit on a slot for two minutes at a time.
+            client.soTimeout = HANDSHAKE_IDLE_MS
             val input = BufferedInputStream(client.inputStream)
             val output: OutputStream = client.outputStream
 
@@ -217,6 +269,23 @@ class AgentBridgeService : Service(), Methods.Host {
                     }
                 if (line.isBlank()) continue
 
+                if (!session.authenticated) {
+                    session.preAuthRequests++
+                    if (session.preAuthRequests > MAX_PREAUTH_REQUESTS) {
+                        AgentState.preAuthRefusals.incrementAndGet()
+                        Framing.writeLine(
+                            output,
+                            JsonRpc.error(
+                                    null,
+                                    JsonRpc.UNAUTHENTICATED,
+                                    "too many requests before pairing",
+                                )
+                                .toString(),
+                        )
+                        break
+                    }
+                }
+
                 val response =
                     try {
                         val request = JsonRpc.parse(line)
@@ -226,6 +295,12 @@ class AgentBridgeService : Service(), Methods.Host {
                     }
 
                 writeResponse(output, response)
+
+                if (session.authenticated && holdingUnauthenticatedSlot) {
+                    holdingUnauthenticatedSlot = false
+                    unauthenticatedCount.decrementAndGet()
+                    client.soTimeout = CONNECTION_IDLE_MS
+                }
 
                 if (session.strikes >= Auth.MAX_STRIKES) {
                     AgentState.pairingCode = auth.currentCode()
@@ -240,6 +315,7 @@ class AgentBridgeService : Service(), Methods.Host {
         } catch (e: Exception) {
             // A dropped connection is normal; it is not a bridge failure.
         } finally {
+            if (holdingUnauthenticatedSlot) unauthenticatedCount.decrementAndGet()
             closeQuietly(client)
             openSockets.remove(client)
             connectionCount.decrementAndGet()
@@ -369,6 +445,7 @@ class AgentBridgeService : Service(), Methods.Host {
             openSockets.clear()
         }
         connectionCount.set(0)
+        unauthenticatedCount.set(0)
         idleThread?.interrupt()
 
         stopForeground(STOP_FOREGROUND_REMOVE)

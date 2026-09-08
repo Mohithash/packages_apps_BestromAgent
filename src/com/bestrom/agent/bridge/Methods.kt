@@ -66,6 +66,15 @@ object Methods {
         var authenticated = false
         var strikes = 0
         var client = ""
+
+        /** Serial number of this connection, recorded with every audit entry. */
+        var connectionId = 0
+
+        /** The peer's uid, checked at accept time and recorded with each entry. */
+        var peerUid = Peer.UID_UNKNOWN
+
+        /** Requests seen before this connection authenticated. */
+        var preAuthRequests = 0
     }
 
     /** What the dispatcher needs to answer a request. */
@@ -164,6 +173,7 @@ object Methods {
             TABLE[request.method]
                 ?: return audited(
                     host,
+                    session,
                     request.method,
                     "",
                     System.currentTimeMillis(),
@@ -178,6 +188,7 @@ object Methods {
         fun refuse(code: Int, message: String, data: JSONObject? = null): JSONObject =
             audited(
                 host,
+                session,
                 spec.name,
                 target,
                 started,
@@ -218,10 +229,19 @@ object Methods {
 
         return try {
             val result = spec.handler(host, session, params)
-            audited(host, spec.name, target, started, JsonRpc.result(request.id, result), null)
+            audited(
+                host,
+                session,
+                spec.name,
+                target,
+                started,
+                JsonRpc.result(request.id, result),
+                null,
+            )
         } catch (e: JsonRpc.RpcException) {
             audited(
                 host,
+                session,
                 spec.name,
                 target,
                 started,
@@ -231,6 +251,7 @@ object Methods {
         } catch (e: Exception) {
             audited(
                 host,
+                session,
                 spec.name,
                 target,
                 started,
@@ -244,14 +265,27 @@ object Methods {
         }
     }
 
+    /**
+     * Records the outcome, but only for a connection that authenticated.
+     *
+     * Auditing unauthenticated traffic would let a peer that never pairs push
+     * every real entry out of a 500 entry ring, which is the accountability
+     * control the design rests on. Those refusals are counted in memory
+     * instead and shown on the settings screen.
+     */
     private fun audited(
         host: Host,
+        session: Session,
         method: String,
         target: String,
         started: Long,
         response: JSONObject,
         errorCode: Int?,
     ): JSONObject {
+        if (!session.authenticated) {
+            if (errorCode != null) AgentState.preAuthRefusals.incrementAndGet()
+            return response
+        }
         host.audit.append(
             method,
             target,

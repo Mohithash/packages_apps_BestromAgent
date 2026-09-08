@@ -19,6 +19,7 @@ package com.bestrom.agent
 
 import com.bestrom.agent.a11y.AgentAccessibilityService
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -46,6 +47,17 @@ object AgentState {
     /** The six digits currently on screen, or null while the bridge is off. */
     @Volatile
     var pairingCode: String? = null
+
+    /**
+     * Connections closed because the peer was neither shell nor root.
+     *
+     * In memory and never written to the audit log: an unauthenticated peer
+     * must not be able to push real entries out of the ring by connecting.
+     */
+    val peerRefusals = AtomicInteger(0)
+
+    /** Requests refused on a connection that had not authenticated yet. */
+    val preAuthRefusals = AtomicInteger(0)
 
     fun reset() {
         bridgeLive.set(false)

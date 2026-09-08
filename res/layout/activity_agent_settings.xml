@@ -89,6 +89,13 @@
             android:textAppearance="?android:attr/textAppearanceListItemSecondary"
             android:textColor="?android:attr/textColorSecondary" />
 
+        <TextView
+            android:id="@+id/status_refused"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
+            android:textColor="?android:attr/textColorSecondary" />
+
         <LinearLayout
             android:id="@+id/pairing_group"
             android:layout_width="match_parent"

@@ -59,6 +59,7 @@ class AgentSettingsActivity : Activity() {
     private lateinit var statusBridge: TextView
     private lateinit var statusA11y: TextView
     private lateinit var statusSession: TextView
+    private lateinit var statusRefused: TextView
     private lateinit var pairingGroup: LinearLayout
     private lateinit var pairingCode: TextView
     private lateinit var emptyLabel: TextView
@@ -91,6 +92,7 @@ class AgentSettingsActivity : Activity() {
         statusBridge = findViewById(R.id.status_bridge)
         statusA11y = findViewById(R.id.status_a11y)
         statusSession = findViewById(R.id.status_session)
+        statusRefused = findViewById(R.id.status_refused)
         pairingGroup = findViewById(R.id.pairing_group)
         pairingCode = findViewById(R.id.pairing_code)
         emptyLabel = findViewById(R.id.activity_empty)
@@ -241,6 +243,12 @@ class AgentSettingsActivity : Activity() {
             if (AgentState.paired.get()) R.string.status_session_paired
             else R.string.status_session_none
         )
+
+        val peerRefusals = AgentState.peerRefusals.get()
+        val preAuthRefusals = AgentState.preAuthRefusals.get()
+        statusRefused.text =
+            if (peerRefusals == 0 && preAuthRefusals == 0) getString(R.string.status_refused_none)
+            else getString(R.string.status_refused, peerRefusals, preAuthRefusals)
 
         val code = AgentState.pairingCode
         if (on && code != null) {
