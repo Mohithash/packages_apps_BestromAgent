@@ -151,11 +151,15 @@ class StepGuardTest {
     @Test
     fun eachSignalHasSomethingToSayToTheModel() {
         val guard = StepGuard(25, 100000)
-        assertTrue(guard.message(StepGuard.Signal.HINT, "").contains("Do not repeat it"))
+        val control = "[BestROM 7f3a91]"
+        assertTrue(guard.message(StepGuard.Signal.HINT, control).contains("Do not repeat it"))
         assertTrue(
-            guard.message(StepGuard.Signal.CHANGE_STRATEGY, "").contains("Change strategy")
+            guard.message(StepGuard.Signal.CHANGE_STRATEGY, control).contains("Change strategy")
         )
-        assertEquals("", guard.message(StepGuard.Signal.NONE, ""))
-        assertTrue(guard.softLimitMessage().contains("token budget"))
+        assertEquals("", guard.message(StepGuard.Signal.NONE, control))
+        assertTrue(guard.softLimitMessage(control).contains("token budget"))
+        // Every line the phone sends carries this task's own prefix.
+        assertTrue(guard.message(StepGuard.Signal.HINT, control).startsWith(control))
+        assertTrue(guard.softLimitMessage(control).startsWith(control))
     }
 }

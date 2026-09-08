@@ -88,6 +88,9 @@ class AgentRunner(
 
     private val context = host.context
     private val dispatch = ToolDispatch(host)
+
+    /** This task's framings. Drawn once, named in the prompt, never reused. */
+    private val boundary = InjectionFilter.boundary()
     private val transcript = Transcript()
     private val guard = StepGuard(task.stepCap, task.tokenCap)
     private var policy: PolicyEngine? = null
@@ -141,7 +144,7 @@ class AgentRunner(
         policy = PolicyEngine(task.goal, apps, Denylist.read(context).toSet(), task.autonomous)
         val functions = functionCatalogue()
 
-        systemPrompt = SystemPrompt.build(deviceLine())
+        systemPrompt = SystemPrompt.build(deviceLine(), boundary)
 
         host.audit.append(
             "agent.start",
@@ -163,7 +166,7 @@ class AgentRunner(
         opening
             .append("\n\n")
             .append(
-                InjectionFilter.envelope(
+                boundary.envelope(
                     "app.list",
                     "",
                     SystemPrompt.appList(apps.map { it.packageName + "  " + it.label }),
@@ -171,7 +174,7 @@ class AgentRunner(
             )
             .append("\n\n")
             .append(
-                InjectionFilter.envelope(
+                boundary.envelope(
                     "functions.list",
                     "",
                     SystemPrompt.functionList(
@@ -184,7 +187,7 @@ class AgentRunner(
             if (digest != null) {
                 opening
                     .append("\n\n")
-                    .append(InjectionFilter.envelope("read_screen", digest.windowPackage, digest.text))
+                    .append(boundary.envelope("read_screen", digest.windowPackage, digest.text))
             }
         }
         transcript.addUser(opening.toString())
@@ -274,7 +277,7 @@ class AgentRunner(
             task.state = TaskState.THINKING
 
             if (guard.steps % SystemPrompt.REASSERT_EVERY == 0) {
-                transcript.addUser(SystemPrompt.reassertion(task.goal))
+                transcript.addUser(SystemPrompt.reassertion(boundary.control, task.goal))
             }
 
             step(task.step, StepEvent.Kind.THINKING, "thinking")
@@ -301,7 +304,7 @@ class AgentRunner(
 
             when (guard.tokenVerdict()) {
                 StepGuard.Signal.TERMINATE -> return terminate(Task.TOKEN_CAP, "")
-                StepGuard.Signal.HINT -> transcript.addUser(guard.softLimitMessage())
+                StepGuard.Signal.HINT -> transcript.addUser(guard.softLimitMessage(boundary.control))
                 else -> {}
             }
         }
@@ -340,7 +343,7 @@ class AgentRunner(
                         return null
                     }
                     transcript.addUser(
-                        "[BestROM] Your answer was cut off. Be brief and act rather than explain."
+                        boundary.say("Your answer was cut off. Be brief and act rather than explain.")
                     )
                 }
                 return outcome.response
@@ -368,7 +371,7 @@ class AgentRunner(
         val text = response.text.orEmpty().trim()
         if (textOnlyInARow < MAX_TEXT_ONLY_IN_A_ROW) {
             transcript.addUser(
-                "[BestROM] Call done(answer=...) to finish, or keep going with a tool."
+                boundary.say("Call done(answer=...) to finish, or keep going with a tool.")
             )
             return false
         }
@@ -455,7 +458,7 @@ class AgentRunner(
         }
         if (execute(call)) return true
         if (repeated != StepGuard.Signal.NONE) {
-            transcript.addUser(guard.message(repeated, ""))
+            transcript.addUser(guard.message(repeated, boundary.control))
         }
         return false
     }
@@ -513,7 +516,7 @@ class AgentRunner(
                         return true
                     }
                     if (signal != StepGuard.Signal.NONE) {
-                        transcript.addUser(guard.message(signal, ""))
+                        transcript.addUser(guard.message(signal, boundary.control))
                     }
                     return false
                 }
@@ -535,7 +538,7 @@ class AgentRunner(
             val digest = dispatch.digest
             transcript.addToolResult(
                 call.id,
-                InjectionFilter.envelope(
+                boundary.envelope(
                     call.name,
                     digest?.windowPackage.orEmpty(),
                     digest?.text.orEmpty(),
@@ -564,7 +567,7 @@ class AgentRunner(
             val lines = FunctionCatalog.text(result)
             transcript.addToolResult(
                 call.id,
-                InjectionFilter.envelope(call.name, "", lines),
+                boundary.envelope(call.name, "", lines),
                 false,
             )
             step(task.step, StepEvent.Kind.RESULT, "listed app functions")
@@ -587,7 +590,7 @@ class AgentRunner(
                 body.append("\n\n").append(diff).append('\n').append(digest.text)
                 transcript.addToolResult(
                     call.id,
-                    InjectionFilter.envelope(call.name, digest.windowPackage, body.toString()),
+                    boundary.envelope(call.name, digest.windowPackage, body.toString()),
                     true,
                 )
                 if (noteScreen(digest)) return true
@@ -596,7 +599,7 @@ class AgentRunner(
         }
         transcript.addToolResult(
             call.id,
-            InjectionFilter.envelope(call.name, "", body.toString()),
+            boundary.envelope(call.name, "", body.toString()),
             false,
         )
         return false
@@ -609,7 +612,7 @@ class AgentRunner(
             terminate(Task.STUCK, "")
             return true
         }
-        if (signal != StepGuard.Signal.NONE) transcript.addUser(guard.message(signal, ""))
+        if (signal != StepGuard.Signal.NONE) transcript.addUser(guard.message(signal, boundary.control))
         return false
     }
 

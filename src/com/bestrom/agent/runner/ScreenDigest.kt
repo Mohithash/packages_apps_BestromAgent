@@ -205,12 +205,13 @@ object ScreenDigest {
      * should say about it anyway.
      */
     private fun labelOf(node: JSONObject): String {
-        val text = node.optString("text")
-        if (text.isNotEmpty()) return InjectionFilter.sanitise(text, 64)
-        val desc = node.optString("desc")
-        if (desc.isNotEmpty()) return InjectionFilter.sanitise(desc, 64)
-        val hint = node.optString("hint")
-        if (hint.isNotEmpty()) return InjectionFilter.sanitise(hint, 64)
+        val password = node.optBoolean("password", false)
+        val text = if (password) "" else node.optString("text")
+        if (text.isNotEmpty()) return InjectionFilter.oneLine(text, 64)
+        val desc = if (password) "" else node.optString("desc")
+        if (desc.isNotEmpty()) return InjectionFilter.oneLine(desc, 64)
+        val hint = if (password) "" else node.optString("hint")
+        if (hint.isNotEmpty()) return InjectionFilter.oneLine(hint, 64)
         val resId = node.optString("res_id")
         if (resId.isNotEmpty()) return resId.substringAfter("id/")
         return node.optString("cls")
@@ -224,10 +225,13 @@ object ScreenDigest {
         if (cls.isNotEmpty()) sb.append("  ").append(cls)
 
         // A password node carries no text, no description and no hint out of
-        // the tree, and nothing is invented here to stand in for them.
-        val text = node.optString("text")
-        val desc = node.optString("desc")
-        val hint = node.optString("hint")
+        // the tree. It is blanked again here rather than trusted to arrive
+        // that way: this file is what leaves the phone, so the guarantee is
+        // worth holding locally as well as upstream.
+        val password = node.optBoolean("password", false)
+        val text = if (password) "" else node.optString("text")
+        val desc = if (password) "" else node.optString("desc")
+        val hint = if (password) "" else node.optString("hint")
         if (text.isNotEmpty()) sb.append(" \"").append(InjectionFilter.sanitise(text)).append('"')
         if (desc.isNotEmpty()) sb.append(" ~").append(InjectionFilter.sanitise(desc))
         if (text.isEmpty() && desc.isEmpty() && hint.isNotEmpty()) {

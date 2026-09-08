@@ -137,11 +137,7 @@ class Transcript {
         val body =
             content
                 .lineSequence()
-                .filter {
-                    it.isNotBlank() &&
-                        it != InjectionFilter.HEADER &&
-                        it != InjectionFilter.FOOTER
-                }
+                .filter { it.isNotBlank() && !InjectionFilter.isBoundaryLine(it) }
                 .lastOrNull()
                 ?: return "ok"
         return if (body.length <= SUMMARY_CHARS) body else body.take(SUMMARY_CHARS) + " ..."

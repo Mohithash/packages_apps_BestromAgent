@@ -146,21 +146,26 @@ class StepGuard(val stepCap: Int, val tokenCap: Int) {
         }
     }
 
-    /** The sentence the model is told when a signal fires. */
-    fun message(signal: Signal, what: String): String =
+    /**
+     * The sentence the model is told when a signal fires.
+     *
+     * [control] is the task's own control prefix, which carries the nonce: a
+     * fixed one is a line any screen can write for itself.
+     */
+    fun message(signal: Signal, control: String): String =
         when (signal) {
             Signal.HINT ->
-                "[BestROM] That did not change anything. Do not repeat it - try a different " +
+                control + " That did not change anything. Do not repeat it - try a different " +
                     "element, scroll, or go back."
             Signal.CHANGE_STRATEGY ->
-                "[BestROM] This approach is not working. Change strategy: read the screen " +
+                control + " This approach is not working. Change strategy: read the screen " +
                     "again and pick a different route, or call done and say what stopped you."
-            Signal.TERMINATE -> "stopped: $what"
+            Signal.TERMINATE -> "stopped"
             Signal.NONE -> ""
         }
 
     /** The one warning sent when the token budget is most of the way gone. */
-    fun softLimitMessage(): String =
-        "[BestROM] You have used most of the token budget for this task. Finish in as few " +
+    fun softLimitMessage(control: String): String =
+        control + " You have used most of the token budget for this task. Finish in as few " +
             "steps as you can, and call done with what you have."
 }

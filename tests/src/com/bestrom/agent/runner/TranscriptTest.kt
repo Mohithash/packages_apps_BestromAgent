@@ -25,6 +25,8 @@ import org.junit.Test
 
 class TranscriptTest {
 
+    private val boundary = InjectionFilter.Boundary("7f3a91")
+
     /** One round: the model calls read_screen and is given a digest back. */
     private fun round(transcript: Transcript, n: Int, screen: Boolean = true) {
         transcript.addAssistant(
@@ -33,7 +35,7 @@ class TranscriptTest {
         )
         transcript.addToolResult(
             "call_$n",
-            InjectionFilter.envelope("read_screen", "com.android.settings", "screen $n"),
+            boundary.envelope("read_screen", "com.android.settings", "screen $n"),
             screen,
         )
     }
@@ -90,7 +92,7 @@ class TranscriptTest {
         transcript.addAssistant(null, listOf(ChatMessage.Call("c1", "call_function", "{}")))
         transcript.addToolResult(
             "c1",
-            InjectionFilter.envelope("call_function", "com.android.settings", "a".repeat(4000)),
+            boundary.envelope("call_function", "com.android.settings", "a".repeat(4000)),
             false,
         )
         for (n in 2..5) round(transcript, n)
@@ -99,7 +101,7 @@ class TranscriptTest {
         assertTrue(summary.length <= Transcript.SUMMARY_CHARS + 4)
         assertTrue(summary.endsWith("..."))
         // The envelope's own lines are not what gets summarised.
-        assertFalse(sent.contains(InjectionFilter.HEADER))
+        assertFalse(sent.contains(boundary.header))
     }
 
     @Test
@@ -135,7 +137,7 @@ class TranscriptTest {
         transcript.addUser("turn on battery saver")
         for (n in 1..6) {
             round(transcript, n)
-            if (n == 2) transcript.addUser(SystemPrompt.reassertion("turn on battery saver"))
+            if (n == 2) transcript.addUser(SystemPrompt.reassertion(boundary.control, "turn on battery saver"))
         }
         val sent = contents(transcript.forSend())
         assertTrue(sent.any { it == "turn on battery saver" })
