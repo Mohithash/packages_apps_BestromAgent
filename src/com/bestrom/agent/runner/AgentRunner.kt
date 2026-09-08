@@ -196,15 +196,21 @@ class AgentRunner(
                     ),
                 )
             )
+        transcript.addUser(opening.toString())
+        // Its own entry, so it ages like every other screen instead of riding
+        // in the first user message for the whole task.
         if (screen is ToolDispatch.Outcome.Ok) {
             val digest = dispatch.digest
             if (digest != null) {
-                opening
-                    .append("\n\n")
-                    .append(boundary.envelope("read_screen", digest.windowPackage, digest.text))
+                transcript.addScreen(
+                    boundary.envelope(
+                        ToolSchema.READ_SCREEN,
+                        digest.windowPackage,
+                        digest.text,
+                    )
+                )
             }
         }
-        transcript.addUser(opening.toString())
         task.state = TaskState.THINKING
         return true
     }

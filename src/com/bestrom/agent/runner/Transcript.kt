@@ -37,6 +37,9 @@ class Transcript {
 
         const val SCREEN_OMITTED = "[screen omitted]"
 
+        /** A screenshot is the most expensive thing in here by an order. */
+        const val SCREENSHOT_OMITTED = "[screenshot omitted]"
+
         /** How much of an older tool result survives as its summary. */
         const val SUMMARY_CHARS = 120
     }
@@ -45,6 +48,7 @@ class Transcript {
         PLAIN,
         SCREEN,
         TOOL,
+        IMAGE,
     }
 
     private class Entry(val message: ChatMessage, val round: Int, val kind: Kind)
@@ -56,9 +60,20 @@ class Transcript {
         entries.add(Entry(ChatMessage(ChatMessage.USER, text), round, Kind.PLAIN))
     }
 
+    /**
+     * A screen digest that is a user message rather than a tool result.
+     *
+     * The opening screen has no tool call to answer, and as a plain user
+     * message it was never compacted - three or four kilobytes riding in
+     * every request for the whole task.
+     */
+    fun addScreen(text: String) {
+        entries.add(Entry(ChatMessage(ChatMessage.USER, text), round, Kind.SCREEN))
+    }
+
     /** A user message carrying an image part - the screenshot tool's result. */
     fun addImage(caption: String, pngBase64: String) {
-        entries.add(Entry(ChatMessage.image(caption, pngBase64), round, Kind.PLAIN))
+        entries.add(Entry(ChatMessage.image(caption, pngBase64), round, Kind.IMAGE))
     }
 
     /** Opens a new round. Everything until the next one belongs to it. */
@@ -94,20 +109,35 @@ class Transcript {
      */
     fun forSend(): List<ChatMessage> {
         val newestScreen = entries.indexOfLast { it.kind == Kind.SCREEN }
+        val newestImage = entries.indexOfLast { it.kind == Kind.IMAGE }
         val keepFrom = round - KEEP_RECENT_ROUNDS + 1
         val out = ArrayList<ChatMessage>(entries.size)
         for ((i, entry) in entries.withIndex()) {
-            // The newest screen is always whole, however old its round: it is
-            // the only thing in here describing what is in front of the user.
-            if (entry.round >= keepFrom || i == newestScreen) {
+            // The newest screen and the newest screenshot are always whole,
+            // however old their round: they are what describes the phone as
+            // it is now.
+            if (i == newestScreen || i == newestImage) {
+                out.add(entry.message)
+                continue
+            }
+            // A PNG is two hundred kilobytes of base64 and is worthless one
+            // step later, so it goes as soon as it is not the newest.
+            if (entry.kind == Kind.IMAGE) {
+                out.add(ChatMessage(entry.message.role, SCREENSHOT_OMITTED))
+                continue
+            }
+            if (entry.round >= keepFrom) {
                 out.add(entry.message)
                 continue
             }
             when (entry.kind) {
+                // The role is the entry's own: an opening screen is a user
+                // message and a tool result is a tool message, and answering
+                // one with the other shape is a 400 on some layers.
                 Kind.SCREEN ->
                     out.add(
                         ChatMessage(
-                            ChatMessage.TOOL,
+                            entry.message.role,
                             SCREEN_OMITTED,
                             toolCallId = entry.message.toolCallId,
                         )
@@ -120,7 +150,7 @@ class Transcript {
                             toolCallId = entry.message.toolCallId,
                         )
                     )
-                Kind.PLAIN -> out.add(entry.message)
+                else -> out.add(entry.message)
             }
         }
         return out
