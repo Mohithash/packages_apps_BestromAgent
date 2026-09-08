@@ -62,6 +62,9 @@ class TranscriptAdapter : RecyclerView.Adapter<TranscriptAdapter.Holder>() {
                 event.kind == StepEvent.Kind.DONE ||
                 event.kind == StepEvent.Kind.CONFIRM
         holder.text.alpha = if (emphasise) 1.0f else 0.7f
+        // The step number is a separate view, so a screen reader would read it
+        // apart from its line. This puts them back together.
+        holder.itemView.contentDescription = event.line()
     }
 
     override fun getItemCount(): Int = events.size

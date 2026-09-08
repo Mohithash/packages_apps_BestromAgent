@@ -212,7 +212,7 @@ class ScreenDigestTest {
     fun theDiffSaysWhatChanged() {
         val before = ScreenDigest.of(settingsTree(rows = 4))
         val same = ScreenDigest.of(settingsTree(rows = 4))
-        assertEquals("the screen did not change", same.diff(before))
+        assertEquals(ScreenDigest.NO_CHANGE, same.diff(before))
         val after = ScreenDigest.of(settingsTree(rows = 6))
         assertTrue(after.diff(before).contains("new"))
         assertEquals("", before.diff(null))

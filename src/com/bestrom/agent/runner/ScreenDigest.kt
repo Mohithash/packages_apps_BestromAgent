@@ -39,6 +39,9 @@ object ScreenDigest {
     /** How deep the indent goes before it stops growing. */
     const val MAX_INDENT_DEPTH = 6
 
+    /** What [Digest.diff] says when nothing moved. The runner tests for it. */
+    const val NO_CHANGE = "the screen did not change"
+
     class Node(
         val id: Int,
         val depth: Int,
@@ -94,7 +97,7 @@ object ScreenDigest {
             val appeared = after.count { !before.contains(it) }
             val gone = before.count { !after.contains(it) }
             if (appeared == 0 && gone == 0) {
-                return if (previous.windowPackage == windowPackage) "the screen did not change"
+                return if (previous.windowPackage == windowPackage) NO_CHANGE
                 else "now in $windowPackage"
             }
             return "$appeared new, $gone gone" +

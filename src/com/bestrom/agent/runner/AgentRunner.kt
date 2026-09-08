@@ -562,7 +562,12 @@ class AgentRunner(
             val read = dispatch.readScreen()
             val digest = dispatch.digest
             if (read is ToolDispatch.Outcome.Ok && digest != null) {
-                body.append("\n\n").append(digest.diff(previous)).append('\n').append(digest.text)
+                val diff = digest.diff(previous)
+                // A screen that moved is progress, whatever the call looked
+                // like. Without this, three taps on the Next button of three
+                // different pages read as one call repeated three times.
+                if (diff != ScreenDigest.NO_CHANGE) guard.noteProgress()
+                body.append("\n\n").append(diff).append('\n').append(digest.text)
                 transcript.addToolResult(
                     call.id,
                     InjectionFilter.envelope(call.name, digest.windowPackage, body.toString()),
