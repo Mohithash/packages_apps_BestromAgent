@@ -112,7 +112,7 @@ class ToolDispatch(private val host: Methods.Host) {
         if (toolCall.name == ToolSchema.READ_SCREEN) {
             return readScreen(toolCall.args.optInt("max_nodes", ToolSchema.DEFAULT_MAX_NODES))
         }
-        val stale = pointIsStale(toolCall)
+        val stale = staleTarget(toolCall)
         if (stale != null) {
             return Outcome.Failed(JsonRpc.STALE_TREE, stale, null)
         }
@@ -120,16 +120,26 @@ class ToolDispatch(private val host: Methods.Host) {
     }
 
     /**
-     * Whether a coordinate tap would land on a screen nobody classified.
+     * Whether the target this call names is still the screen in front.
      *
-     * A tap by node id is checked against the tree by the platform. A tap by
-     * x and y is not, and the policy engine still classified it against the
-     * last digest - so it is refused unless the window in front is still the
-     * one that digest describes.
+     * Two cases. A node-addressed call with no tree id would reach the bridge
+     * without one and be answered "tree_id is required with node_id" - an
+     * error about a parameter the model has never seen and cannot supply, so
+     * it is answered as a stale tree instead, which the runner knows how to
+     * recover from. And a tap by x and y is checked against nothing by the
+     * platform, while the policy engine classified it against the last digest,
+     * so it is refused unless the window in front is still that one.
      */
-    private fun pointIsStale(toolCall: ToolSchema.ToolCall): String? {
-        if (toolCall.name != ToolSchema.TAP && toolCall.name != ToolSchema.LONG_PRESS) return null
-        if (toolCall.args.has("node_id")) return null
+    private fun staleTarget(toolCall: ToolSchema.ToolCall): String? {
+        val name = toolCall.name
+        if (name != ToolSchema.TAP && name != ToolSchema.LONG_PRESS && name != ToolSchema.TYPE) {
+            return null
+        }
+        if (toolCall.args.has("node_id")) {
+            return if (treeId == null) ToolSchema.errorText(JsonRpc.STALE_TREE, "") else null
+        }
+        // type without a node goes to the focused field, whatever that is.
+        if (name == ToolSchema.TYPE) return null
         val current = digest ?: return "there is nothing to tap yet; read the screen first"
         val live = AgentState.a11y?.activeWindowPackage()
         if (live == null || live != current.windowPackage) {

@@ -448,10 +448,13 @@ object ToolSchema {
                 out.put("max_nodes", call.args.optInt("max_nodes", DEFAULT_MAX_NODES))
             }
             TAP, LONG_PRESS -> {
-                if (call.args.has("node_id")) {
+                // node_id without a tree_id is answered -32602 by the bridge,
+                // so it is never built: the runner reads the screen again
+                // instead.
+                if (call.args.has("node_id") && treeId != null) {
                     out.put("node_id", call.args.optInt("node_id"))
-                    if (treeId != null) out.put("tree_id", treeId)
-                } else {
+                    out.put("tree_id", treeId)
+                } else if (!call.args.has("node_id")) {
                     out.put("x", call.args.optInt("x"))
                     out.put("y", call.args.optInt("y"))
                 }
@@ -468,9 +471,9 @@ object ToolSchema {
             }
             TYPE -> {
                 out.put("text", call.args.optString("text"))
-                if (call.args.has("node_id")) {
+                if (call.args.has("node_id") && treeId != null) {
                     out.put("node_id", call.args.optInt("node_id"))
-                    if (treeId != null) out.put("tree_id", treeId)
+                    out.put("tree_id", treeId)
                 }
                 if (call.args.has("replace")) out.put("replace", call.args.optBoolean("replace"))
             }

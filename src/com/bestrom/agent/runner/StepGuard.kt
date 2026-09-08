@@ -129,10 +129,17 @@ class StepGuard(val stepCap: Int, val tokenCap: Int) {
         return if (errorRepeats >= REPEATS_BEFORE_SIGNAL) escalate() else Signal.NONE
     }
 
-    /** A step that changed something clears the repetition counters. */
+    /**
+     * A step that changed something clears the repetition counters.
+     *
+     * The escalation count goes with them. It is task-lifetime otherwise, so
+     * three unrelated hiccups twenty steps apart, each recovered from, ended a
+     * working task as "stuck".
+     */
     fun noteProgress() {
         callRepeats = 0
         errorRepeats = 0
+        escalations = 0
         lastCall = ""
         lastError = ""
     }

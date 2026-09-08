@@ -76,6 +76,9 @@ class AgentRunner(
         const val INTERACTING_RETRIES = 3
         const val INTERACTING_WAIT_MS = 1600L
 
+        /** -32007 is the phone's own rate limiter, and it is worth one wait. */
+        const val RATE_LIMIT_RETRIES = 1
+
         const val MAX_MALFORMED_IN_A_ROW = 3
         const val MAX_TEXT_ONLY_IN_A_ROW = 2
 
@@ -503,7 +506,11 @@ class AgentRunner(
 
     /** Runs the call, retrying only the one error that is a race with a person. */
     private fun execute(call: ToolSchema.ToolCall): Boolean {
+        // Two counters, not one: a rate-limit wait used to spend one of the
+        // three retries a race with the user is allowed, and the other way
+        // round a single -32006 retry turned the rate-limit retry off.
         var interacting = 0
+        var rateLimited = 0
         while (true) {
             if (task.stopped()) {
                 terminate(Task.STOPPED, "")
@@ -520,11 +527,14 @@ class AgentRunner(
                         sleep(INTERACTING_WAIT_MS)
                         continue
                     }
-                    if (outcome.code == JsonRpc.RATE_LIMITED && interacting == 0) {
-                        interacting++
+                    if (outcome.code == JsonRpc.RATE_LIMITED &&
+                        rateLimited < RATE_LIMIT_RETRIES
+                    ) {
+                        rateLimited++
                         sleep(outcome.data?.optLong("retry_after_ms", 200L) ?: 200L)
                         continue
                     }
+                    if (outcome.code == JsonRpc.STALE_TREE) return staleTree(call)
                     if (outcome.code == JsonRpc.DEVICE_LOCKED) {
                         terminate(Task.LOCKED, "")
                         return true
@@ -547,6 +557,45 @@ class AgentRunner(
                 }
             }
         }
+    }
+
+    /**
+     * The screen moved out from under a call.
+     *
+     * The cached tree id is gone by now, so the screen is read again here and
+     * the fresh digest goes back with the error. The call is never re-issued:
+     * the model decides what to do with the screen it is now looking at.
+     */
+    private fun staleTree(call: ToolSchema.ToolCall): Boolean {
+        step(task.step, StepEvent.Kind.ERROR, "the screen changed; it was read again")
+        val body =
+            StringBuilder("the screen changed before this could run, so it was read again")
+        val read = dispatch.readScreen()
+        val digest = dispatch.digest
+        if (read is ToolDispatch.Outcome.Ok && digest != null) {
+            body.append("\n\n").append(digest.text)
+            transcript.addToolResult(
+                call.id,
+                boundary.envelope(ToolSchema.READ_SCREEN, digest.windowPackage, body.toString()),
+                true,
+            )
+            if (noteScreen(digest)) return true
+            return false
+        }
+        transcript.addToolResult(
+            call.id,
+            boundary.envelope(call.name, "", body.toString()),
+            false,
+        )
+        val signal = guard.noteError("stale tree")
+        if (signal == StepGuard.Signal.TERMINATE) {
+            terminate(Task.STUCK, "")
+            return true
+        }
+        if (signal != StepGuard.Signal.NONE) {
+            transcript.addUser(guard.message(signal, boundary.control))
+        }
+        return false
     }
 
     /**
