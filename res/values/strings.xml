@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 The BestROM Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+-->
+<resources>
+    <string name="app_name">Agent mode</string>
+    <string name="agent_title">Agent mode</string>
+
+    <string name="agent_intro">Lets a computer you have connected over USB or adb read this screen and act on it. Nothing leaves the phone on its own.</string>
+    <string name="agent_switch_label">Agent mode</string>
+
+    <string name="status_header">Status</string>
+    <string name="status_bridge_on">Bridge  listening (bestrom_agent)</string>
+    <string name="status_bridge_off">Bridge  off</string>
+    <string name="status_a11y_on">Accessibility  connected</string>
+    <string name="status_a11y_off">Accessibility  off</string>
+    <string name="status_session_paired">Sessions  1 paired</string>
+    <string name="status_session_none">Sessions  not paired</string>
+
+    <string name="pairing_header">Pairing code</string>
+    <string name="pairing_new_code">New code</string>
+    <string name="pairing_hint">Type this on the computer to pair. It changes each time Agent mode starts.</string>
+
+    <string name="can_do_header">What the agent can do</string>
+    <string name="can_do_body">Read what is on screen.\nTap, swipe and type.\nTake a screenshot.\nOpen apps.\nCall app functions Settings and other apps publish.</string>
+    <string name="cannot_do_header">What it cannot do</string>
+    <string name="cannot_do_body">Act while the phone is locked.\nAct while you are touching the screen.\nRead password fields or apps that block screenshots.\nDo anything after a restart.</string>
+
+    <string name="activity_header">Activity</string>
+    <string name="activity_empty">No requests yet.</string>
+    <string name="activity_clear">Clear</string>
+    <string name="activity_clear_title">Clear the activity log?</string>
+    <string name="activity_clear_message">The last %1$d entries are removed. This cannot be undone.</string>
+    <string name="activity_clear_confirm">Clear</string>
+    <string name="activity_clear_cancel">Cancel</string>
+
+    <string name="footer_reboot">Agent mode turns itself off when the phone restarts.</string>
+
+    <string name="needs_notifications">Agent mode needs permission to show its ongoing notification.</string>
+    <string name="bridge_failed">The bridge did not start. Agent mode is off.</string>
+
+    <string name="notification_channel">Agent mode</string>
+    <string name="notification_title">Agent mode on</string>
+    <string name="notification_text">Tap to stop</string>
+    <string name="notification_text_idle">Stopping soon, no client has connected</string>
+    <string name="notification_stop">Stop</string>
+
+    <string name="a11y_description">Reads what is on screen and acts on it for a computer connected over adb, only while Agent mode is on.</string>
+    <string name="a11y_summary">Part of Agent mode</string>
+</resources>
