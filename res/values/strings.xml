@@ -66,11 +66,20 @@
     <string name="needs_notifications">Agent mode needs permission to show its ongoing notification.</string>
     <string name="bridge_failed">The bridge did not start. Agent mode is off.</string>
 
+    <string name="task_needs_a_goal">Type what the agent should do.</string>
+    <string name="task_agent_off">Agent mode is off.</string>
+    <string name="task_no_accessibility">The accessibility service is not connected.</string>
+    <string name="task_already_running">A task is already running.</string>
+    <string name="task_no_brain">No brain is set up yet.</string>
+
     <string name="notification_channel">Agent mode</string>
     <string name="notification_title">Agent mode on</string>
     <string name="notification_text">Tap to stop</string>
     <string name="notification_text_idle">Stopping soon, no client has connected</string>
     <string name="notification_stop">Stop</string>
+    <string name="notification_acting">Agent acting</string>
+    <string name="notification_waiting">Waiting for your approval</string>
+    <string name="notification_stop_task">Stop task</string>
 
     <string name="a11y_description">Reads what is on screen and acts on it for a computer connected over adb, only while Agent mode is on.</string>
     <string name="a11y_summary">Part of Agent mode</string>

@@ -31,11 +31,36 @@ class ChatMessage(
     val content: String?,
     val toolCalls: List<Call>? = null,
     val toolCallId: String? = null,
+    /**
+     * A PNG, base64, sent as a data URI content part.
+     *
+     * Only ever a user message: the compatibility layers accept an image in a
+     * user turn and not in a tool turn, so a screenshot is answered as a tool
+     * result saying it was taken and then handed over in the message after it.
+     */
+    val imageBase64: String? = null,
 ) {
     class Call(val id: String, val name: String, val argumentsJson: String)
 
     fun toJson(): JSONObject {
         val o = JSONObject().put("role", role)
+        val image = imageBase64
+        if (image != null) {
+            o.put(
+                "content",
+                JSONArray()
+                    .put(JSONObject().put("type", "text").put("text", content ?: ""))
+                    .put(
+                        JSONObject()
+                            .put("type", "image_url")
+                            .put(
+                                "image_url",
+                                JSONObject().put("url", "data:image/png;base64," + image),
+                            )
+                    ),
+            )
+            return o
+        }
         o.put("content", content ?: JSONObject.NULL)
         if (toolCallId != null) o.put("tool_call_id", toolCallId)
         val calls = toolCalls
@@ -62,6 +87,10 @@ class ChatMessage(
         const val USER = "user"
         const val ASSISTANT = "assistant"
         const val TOOL = "tool"
+
+        /** A screenshot, as the one message shape every preset accepts. */
+        fun image(caption: String, pngBase64: String): ChatMessage =
+            ChatMessage(USER, caption, imageBase64 = pngBase64)
     }
 }
 

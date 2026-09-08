@@ -33,7 +33,10 @@ import android.util.Log
 import com.bestrom.agent.AgentState
 import com.bestrom.agent.R
 import com.bestrom.agent.audit.AuditLog
+import com.bestrom.agent.brain.BrainPrefs
 import com.bestrom.agent.functions.AppFunctionsClient
+import com.bestrom.agent.runner.AgentRunner
+import com.bestrom.agent.runner.Task
 import com.bestrom.agent.toggle.AgentToggle
 import com.bestrom.agent.ui.AgentSettingsActivity
 import java.io.BufferedInputStream
@@ -67,6 +70,9 @@ class AgentBridgeService : Service(), Methods.Host {
         const val ACTION_START = "com.bestrom.agent.action.START"
         const val ACTION_STOP = "com.bestrom.agent.action.STOP"
         const val ACTION_NEW_CODE = "com.bestrom.agent.action.NEW_CODE"
+
+        /** Ends the running task and leaves Agent mode on. */
+        const val ACTION_STOP_TASK = "com.bestrom.agent.action.STOP_TASK"
 
         const val SOCKET_NAME = "bestrom_agent"
         const val CHANNEL_ID = "agent"
@@ -110,6 +116,12 @@ class AgentBridgeService : Service(), Methods.Host {
     private var server: LocalServerSocket? = null
     private var acceptThread: Thread? = null
     private var idleThread: Thread? = null
+
+    /** The one task that may be running, and the thread it runs on. */
+    @Volatile
+    private var runner: AgentRunner? = null
+
+    private var taskThread: Thread? = null
     private val openSockets =
         Collections.synchronizedSet(java.util.HashSet<LocalSocket>())
 
@@ -128,6 +140,10 @@ class AgentBridgeService : Service(), Methods.Host {
         }
         if (intent?.action == ACTION_NEW_CODE) {
             if (running.get()) regenerateCode()
+            return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_STOP_TASK) {
+            stopTask()
             return START_NOT_STICKY
         }
         if (running.get()) return START_NOT_STICKY
@@ -162,6 +178,9 @@ class AgentBridgeService : Service(), Methods.Host {
         // Only now is the bridge live; the accessibility component is enabled
         // after this flag is set, never before.
         AgentState.bridgeLive.set(true)
+        // Published so the runner can reach the same dispatcher host the adb
+        // bridge uses. Cleared in shutdown, so nothing holds it while off.
+        AgentState.bridge = this
 
         acceptThread = Thread({ acceptLoop(socket) }, "agent-accept").also { it.start() }
         idleThread = Thread(::idleLoop, "agent-idle").also { it.start() }
@@ -187,6 +206,77 @@ class AgentBridgeService : Service(), Methods.Host {
 
     override fun stopAgent() {
         stopRequested.set(true)
+    }
+
+    // -------------------------------------------------------------------- task
+
+    /**
+     * Starts one task on one thread.
+     *
+     * Returns null when it started, or the sentence to show when it did not.
+     * The caps and the confirmation policy are read here and copied into the
+     * task, so changing a setting under a running task cannot widen it.
+     */
+    fun startTask(goal: String): String? {
+        val text = goal.trim()
+        if (text.isEmpty()) return getString(R.string.task_needs_a_goal)
+        if (!running.get() || !AgentState.bridgeLive.get()) {
+            return getString(R.string.task_agent_off)
+        }
+        if (AgentState.a11y == null) return getString(R.string.task_no_accessibility)
+        if (AgentState.task != null) return getString(R.string.task_already_running)
+
+        val config = BrainPrefs.read(this)
+        if (!config.configured()) return getString(R.string.task_no_brain)
+
+        val task =
+            Task(
+                java.util.UUID.randomUUID().toString(),
+                text,
+                config.autonomous,
+                config.stepCap,
+                config.tokenCap,
+                config.sendScreenshots(),
+                System.currentTimeMillis(),
+            )
+        AgentState.clearSteps()
+        AgentState.task = task
+        val created =
+            AgentRunner(this, task, config, ::onRunnerNotify) { onTaskFinished() }
+        runner = created
+        taskThread = Thread(created, "agent-task").also { it.start() }
+        return null
+    }
+
+    /** Ends the task without touching the switch. */
+    fun stopTask() {
+        runner?.cancel()
+    }
+
+    private fun onTaskFinished() {
+        AgentState.task = null
+        AgentState.confirm = null
+        runner = null
+        taskThread = null
+        if (running.get()) updateNotification(getString(R.string.notification_text))
+    }
+
+    /** The three states the ongoing notification moves between while a task runs. */
+    private fun onRunnerNotify(mode: AgentRunner.Mode, text: String, step: Int) {
+        if (!running.get()) return
+        try {
+            val manager = getSystemService(NotificationManager::class.java)
+            val notification =
+                when (mode) {
+                    AgentRunner.Mode.IDLE -> buildNotification(getString(R.string.notification_text))
+                    AgentRunner.Mode.WAITING ->
+                        buildTaskNotification(getString(R.string.notification_waiting), step, true)
+                    AgentRunner.Mode.ACTING -> buildTaskNotification(text, step, false)
+                }
+            manager.notify(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            // A notification that cannot be posted is not worth ending a task.
+        }
     }
 
     // ------------------------------------------------------------------ socket
@@ -413,6 +503,68 @@ class AgentBridgeService : Service(), Methods.Host {
             .build()
     }
 
+    /**
+     * The acting notification.
+     *
+     * VISIBILITY_PRIVATE, because the text is the goal the user typed and the
+     * lock screen is not the place for it. There is no full-screen intent even
+     * while a confirm sheet is waiting: an agent that can put a window over
+     * everything is the shape of the attack, not the defence.
+     */
+    private fun buildTaskNotification(text: String, step: Int, waiting: Boolean): Notification {
+        val open =
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, AgentSettingsActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE,
+            )
+        val stopTask =
+            PendingIntent.getService(
+                this,
+                2,
+                Intent(this, AgentBridgeService::class.java).setAction(ACTION_STOP_TASK),
+                PendingIntent.FLAG_IMMUTABLE,
+            )
+        val stop =
+            PendingIntent.getService(
+                this,
+                1,
+                Intent(this, AgentBridgeService::class.java).setAction(ACTION_STOP),
+                PendingIntent.FLAG_IMMUTABLE,
+            )
+        val builder =
+            Notification.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_agent_notification)
+                .setContentTitle(getString(R.string.notification_acting))
+                .setContentText(text)
+                .setContentIntent(open)
+                .setOngoing(true)
+                .setShowWhen(false)
+                .setVisibility(Notification.VISIBILITY_PRIVATE)
+                .addAction(
+                    Notification.Action.Builder(
+                            null as android.graphics.drawable.Icon?,
+                            getString(R.string.notification_stop_task),
+                            stopTask,
+                        )
+                        .build()
+                )
+                .addAction(
+                    Notification.Action.Builder(
+                            null as android.graphics.drawable.Icon?,
+                            getString(R.string.notification_stop),
+                            stop,
+                        )
+                        .build()
+                )
+        val cap = AgentState.task?.stepCap ?: 0
+        // The step count without a text update per step.
+        if (!waiting && cap > 0) builder.setProgress(cap, step.coerceIn(0, cap), false)
+        return builder.build()
+    }
+
     private fun updateNotification(text: String) {
         try {
             getSystemService(NotificationManager::class.java)
@@ -443,6 +595,12 @@ class AgentBridgeService : Service(), Methods.Host {
             return
         }
         AgentState.bridgeLive.set(false)
+        // The task goes with the bridge: the runner checks the flag before
+        // every call, and cancel drops a model call that is in flight.
+        runner?.cancel()
+        AgentState.task = null
+        AgentState.confirm = null
+        AgentState.bridge = null
         AgentState.paired.set(false)
         auth.clear()
         auth.setCodeListener(null)

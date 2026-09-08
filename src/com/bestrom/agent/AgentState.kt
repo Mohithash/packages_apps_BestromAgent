@@ -18,6 +18,10 @@
 package com.bestrom.agent
 
 import com.bestrom.agent.a11y.AgentAccessibilityService
+import com.bestrom.agent.bridge.AgentBridgeService
+import com.bestrom.agent.runner.PendingConfirm
+import com.bestrom.agent.runner.StepEvent
+import com.bestrom.agent.runner.Task
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -70,10 +74,51 @@ object AgentState {
     /** Requests refused on a connection that had not authenticated yet. */
     val preAuthRefusals = AtomicInteger(0)
 
+    /**
+     * The running bridge service, published so the runner can reach the same
+     * dispatcher host the adb bridge uses. Null whenever Agent mode is off.
+     */
+    @Volatile
+    var bridge: AgentBridgeService? = null
+
+    /** The one task that may be running. Cleared the moment it ends. */
+    @Volatile
+    var task: Task? = null
+
+    /** A confirm sheet the runner is blocked on, or null. */
+    @Volatile
+    var confirm: PendingConfirm? = null
+
+    /** How many step lines the task screen keeps. Nothing is persisted. */
+    const val MAX_STEPS = 300
+
+    private val steps = ArrayList<StepEvent>(64)
+
+    /** Called on the runner's thread whenever a step line is added. */
+    @Volatile
+    var stepListener: (() -> Unit)? = null
+
+    @Synchronized
+    fun addStep(event: StepEvent) {
+        steps.add(event)
+        while (steps.size > MAX_STEPS) steps.removeAt(0)
+        stepListener?.invoke()
+    }
+
+    @Synchronized
+    fun steps(): List<StepEvent> = ArrayList(steps)
+
+    @Synchronized
+    fun clearSteps() {
+        steps.clear()
+    }
+
     fun reset() {
         bridgeLive.set(false)
         paired.set(false)
         pairingCode = null
         pairingCooldownUntilMs = 0
+        task = null
+        confirm = null
     }
 }
