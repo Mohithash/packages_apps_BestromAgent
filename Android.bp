@@ -75,6 +75,10 @@ java_library_host {
         "src/com/bestrom/agent/brain/ChatRequest.kt",
         "src/com/bestrom/agent/brain/ChatResponse.kt",
         "src/com/bestrom/agent/brain/OpenAiCompatClient.kt",
+        "src/com/bestrom/agent/runner/FunctionCatalog.kt",
+        "src/com/bestrom/agent/runner/InjectionFilter.kt",
+        "src/com/bestrom/agent/runner/ScreenDigest.kt",
+        "src/com/bestrom/agent/runner/ToolSchema.kt",
     ],
 
     static_libs: [

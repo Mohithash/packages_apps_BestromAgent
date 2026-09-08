@@ -43,6 +43,15 @@ class AuditLog(private val file: File) {
         /** The peer uid of an entry the phone wrote itself, not the bridge. */
         const val UID_NONE = -1
 
+        /**
+         * The peer uid of an entry the on-phone runner made.
+         *
+         * A real uid can never be negative, so this cannot collide with a
+         * socket peer, and the settings screen labels it "agent" rather than
+         * printing a number nobody can look up.
+         */
+        const val UID_AGENT = -2
+
         @Volatile
         private var instance: AuditLog? = null
 
