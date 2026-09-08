@@ -125,7 +125,8 @@ class PolicyEngineTest {
 
     @Test
     fun tapAsksByDefaultAndDoesNotUnderAutonomousOrAllowAll() {
-        val screen = screen("com.android.settings")
+        // An ordinary app: Settings is a surface that always asks.
+        val screen = screen("com.example.notes")
         val tap = call(ToolSchema.TAP, """{"node_id":0}""")
 
         val asking = engine()
@@ -133,13 +134,31 @@ class PolicyEngineTest {
         val decision = asking.decide(tap, screen, false)
         assertTrue(decision is PolicyEngine.Decision.NeedsConfirm)
         assertEquals("Tap Battery saver", (decision as PolicyEngine.Decision.NeedsConfirm).what)
-        assertTrue(decision.target.contains("Settings"))
+        assertTrue(decision.target.contains("Notes"))
         assertFalse(decision.sensitive)
 
         assertTrue(asking.decide(tap, screen, true) is PolicyEngine.Decision.Allow)
         assertTrue(
             engine(autonomous = true).decide(tap, screen, false) is PolicyEngine.Decision.Allow
         )
+    }
+
+    @Test
+    fun everyActionOnASettingsScreenAsksEveryTime() {
+        // Autonomous and Allow all both stop at the door of a screen that can
+        // write a secure setting.
+        val screen = screen("com.android.settings")
+        val engine = engine(autonomous = true)
+        for (call in
+            listOf(
+                call(ToolSchema.TAP, """{"x":10,"y":20}"""),
+                call(ToolSchema.SWIPE, """{"from":[10,90],"to":[10,10]}"""),
+            )) {
+            assertEquals(call.name, PolicyEngine.Tier.ALWAYS_CONFIRM, engine.tier(call, screen))
+            val decision = engine.decide(call, screen, true)
+            assertTrue(call.name, decision is PolicyEngine.Decision.NeedsConfirm)
+            assertTrue(call.name, (decision as PolicyEngine.Decision.NeedsConfirm).sensitive)
+        }
     }
 
     @Test
@@ -202,10 +221,19 @@ class PolicyEngineTest {
     }
 
     @Test
-    fun anOrdinarySettingIsNotRefused() {
+    fun anOrdinarySettingIsNotRefusedButItStillAsks() {
         val call = settings("setDeviceStateItem", "low_power")
-        assertEquals(PolicyEngine.Tier.MUTATE, engine().tier(call, null))
+        // A package that can write a secure setting asks every time, even for
+        // a key that is not on the refused list.
+        assertEquals(PolicyEngine.Tier.ALWAYS_CONFIRM, engine().tier(call, null))
         assertTrue(engine().decide(call, null, false) is PolicyEngine.Decision.NeedsConfirm)
+        // And an app function that is not a settings surface only confirms.
+        val other =
+            call(
+                ToolSchema.CALL_FUNCTION,
+                """{"package":"com.example.notes","function":"createNote"}""",
+            )
+        assertEquals(PolicyEngine.Tier.MUTATE, engine().tier(other, null))
     }
 
     @Test
@@ -299,13 +327,13 @@ class PolicyEngineTest {
         // what is on screen.
         val tap = call(ToolSchema.TAP, """{"node_id":0}""")
         val engine = engine()
-        assertEquals(PolicyEngine.Tier.MUTATE, engine.tier(tap, screen("com.android.settings")))
+        assertEquals(PolicyEngine.Tier.MUTATE, engine.tier(tap, screen("com.example.notes")))
         assertEquals(PolicyEngine.Tier.ALWAYS_CONFIRM, engine.tier(tap, screen("com.example.bank")))
     }
 
     @Test
     fun typingIntoAPasswordFieldIsRefused() {
-        val screen = screen("com.android.settings")
+        val screen = screen("com.example.notes")
         val call = call(ToolSchema.TYPE, """{"text":"1234","node_id":1}""")
         assertEquals(PolicyEngine.Tier.FORBIDDEN, engine().tier(call, screen))
         val refusal = engine(autonomous = true).decide(call, screen, true)

@@ -84,6 +84,7 @@ class AgentRunner(
 
         private const val HCE_ACTION = "android.nfc.cardemulation.action.HOST_APDU_SERVICE"
         private const val BILLING = "com.android.vending.BILLING"
+        private const val WRITE_SECURE_SETTINGS = "android.permission.WRITE_SECURE_SETTINGS"
     }
 
     private val context = host.context
@@ -98,6 +99,9 @@ class AgentRunner(
 
     @Volatile
     private var client: OpenAiCompatClient? = null
+
+    /** Filled in with the app list, because both come off the same scan. */
+    private var settingsPackages: Set<String> = setOf(PolicyEngine.SETTINGS)
 
     private var malformedInARow = 0
     private var textOnlyInARow = 0
@@ -141,7 +145,14 @@ class AgentRunner(
         step(0, StepEvent.Kind.THINKING, "preparing")
 
         val apps = launchableApps()
-        policy = PolicyEngine(task.goal, apps, Denylist.read(context).toSet(), task.autonomous)
+        policy =
+            PolicyEngine(
+                task.goal,
+                apps,
+                Denylist.read(context).toSet(),
+                task.autonomous,
+                settingsPackages,
+            )
         val functions = functionCatalogue()
 
         systemPrompt = SystemPrompt.build(deviceLine(), boundary)
@@ -233,14 +244,25 @@ class AgentRunner(
         }
 
         val billing = HashSet<String>()
+        val secure = HashSet<String>()
+        secure.add(PolicyEngine.SETTINGS)
         try {
             for (info in pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)) {
                 val requested = info.requestedPermissions ?: continue
                 if (requested.contains(BILLING)) billing.add(info.packageName)
+                // Anything that can write a secure setting is a settings
+                // surface, whatever it is called.
+                if (requested.contains(WRITE_SECURE_SETTINGS) &&
+                    pm.checkPermission(WRITE_SECURE_SETTINGS, info.packageName) ==
+                        PackageManager.PERMISSION_GRANTED
+                ) {
+                    secure.add(info.packageName)
+                }
             }
         } catch (e: Exception) {
             // Same: the classification degrades to the name list.
         }
+        settingsPackages = secure
 
         val out = ArrayList<PolicyEngine.AppFacts>(list.length())
         val seen = HashSet<String>()
@@ -409,8 +431,11 @@ class AgentRunner(
 
         val engine = policy
         val screen = dispatch.digest
+        // No classifier, no action: the default on a missing policy engine is
+        // a refusal, not a free pass.
         val decision =
-            engine?.decide(call, screen, task.allowAllForThisTask) ?: PolicyEngine.Decision.Allow
+            engine?.decide(call, screen, task.allowAllForThisTask)
+                ?: PolicyEngine.Decision.Refuse("no policy engine")
 
         when (decision) {
             is PolicyEngine.Decision.Refuse -> {

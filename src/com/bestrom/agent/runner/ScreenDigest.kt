@@ -50,6 +50,8 @@ object ScreenDigest {
         val line: String,
         /** What to call this element in a sentence a person reads. */
         val label: String,
+        /** The resource id, short form, which is what tells two rows apart. */
+        val resId: String,
         val password: Boolean,
         val editable: Boolean,
         val clickable: Boolean,
@@ -151,6 +153,7 @@ object ScreenDigest {
                         node.optString("pkg"),
                         line.trimStart(),
                         labelOf(node),
+                        shortResId(node),
                         node.optBoolean("password", false),
                         node.optBoolean("editable", false),
                         node.optBoolean("clickable", false),
@@ -204,6 +207,14 @@ object ScreenDigest {
      * through to its resource id or its class, which is what the confirm sheet
      * should say about it anyway.
      */
+    /** "switch_widget" out of "com.android.settings:id/switch_widget". */
+    private fun shortResId(node: JSONObject): String {
+        val resId = node.optString("res_id")
+        if (resId.isEmpty()) return ""
+        val marker = resId.indexOf("id/")
+        return if (marker < 0) resId else resId.substring(marker + 3)
+    }
+
     private fun labelOf(node: JSONObject): String {
         val password = node.optBoolean("password", false)
         val text = if (password) "" else node.optString("text")
@@ -212,8 +223,8 @@ object ScreenDigest {
         if (desc.isNotEmpty()) return InjectionFilter.oneLine(desc, 64)
         val hint = if (password) "" else node.optString("hint")
         if (hint.isNotEmpty()) return InjectionFilter.oneLine(hint, 64)
-        val resId = node.optString("res_id")
-        if (resId.isNotEmpty()) return resId.substringAfter("id/")
+        val resId = shortResId(node)
+        if (resId.isNotEmpty()) return resId
         return node.optString("cls")
     }
 

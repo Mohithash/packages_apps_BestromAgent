@@ -17,6 +17,7 @@
 
 package com.bestrom.agent.runner
 
+import com.bestrom.agent.AgentState
 import com.bestrom.agent.audit.AuditLog
 import com.bestrom.agent.bridge.JsonRpc
 import com.bestrom.agent.bridge.Methods
@@ -111,7 +112,30 @@ class ToolDispatch(private val host: Methods.Host) {
         if (toolCall.name == ToolSchema.READ_SCREEN) {
             return readScreen(toolCall.args.optInt("max_nodes", ToolSchema.DEFAULT_MAX_NODES))
         }
+        val stale = pointIsStale(toolCall)
+        if (stale != null) {
+            return Outcome.Failed(JsonRpc.STALE_TREE, stale, null)
+        }
         return call(toolCall.tool.method, ToolSchema.bridgeParams(toolCall, treeId, confirm))
+    }
+
+    /**
+     * Whether a coordinate tap would land on a screen nobody classified.
+     *
+     * A tap by node id is checked against the tree by the platform. A tap by
+     * x and y is not, and the policy engine still classified it against the
+     * last digest - so it is refused unless the window in front is still the
+     * one that digest describes.
+     */
+    private fun pointIsStale(toolCall: ToolSchema.ToolCall): String? {
+        if (toolCall.name != ToolSchema.TAP && toolCall.name != ToolSchema.LONG_PRESS) return null
+        if (toolCall.args.has("node_id")) return null
+        val current = digest ?: return "there is nothing to tap yet; read the screen first"
+        val live = AgentState.a11y?.activeWindowPackage()
+        if (live == null || live != current.windowPackage) {
+            return ToolSchema.errorText(JsonRpc.STALE_TREE, "")
+        }
+        return null
     }
 
     /** The methods whose result is worth a fresh look at the screen. */

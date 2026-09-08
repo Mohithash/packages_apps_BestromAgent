@@ -36,6 +36,12 @@ class PolicyEngine(
     private val excluded: Set<String>,
     /** Snapshotted from settings when the task started, never re-read. */
     private val autonomous: Boolean,
+    /**
+     * The packages that can change a secure setting: Settings itself, and
+     * whatever else on this device holds WRITE_SECURE_SETTINGS. Resolved once
+     * by the caller, because this class knows nothing about a PackageManager.
+     */
+    settingsPackages: Set<String> = setOf(SETTINGS),
 ) {
 
     /** What the phone knows about an installed app, and nothing it claims itself. */
@@ -118,11 +124,34 @@ class PolicyEngine(
                 "verified_boot",
             )
 
-        /** The parameter names a settings function uses to say what it changes. */
-        val KEY_PARAMS: List<String> = listOf("key", "settingKey", "preferenceKey")
+        /**
+         * The same refusals as the keys above, spelled the way the interface
+         * spells them.
+         *
+         * The key list only ever protected call_function. The same lock screen
+         * is two taps away in Settings, and a tap was tier MUTATE.
+         */
+        val FORBIDDEN_UI_PARTS: List<String> =
+            listOf(
+                "screen lock",
+                "fingerprint",
+                "face unlock",
+                "developer options",
+                "usb debugging",
+                "oem unlocking",
+                "factory reset",
+                "erase all data",
+                "encryption",
+                "accessibility",
+                "device admin",
+                "install unknown apps",
+            )
 
         /** How long a one-word app label has to be before the goal can name it. */
         const val MIN_LABEL_CHARS = 6
+
+        /** How far into a function's own parameters the key search goes. */
+        const val MAX_PARAM_DEPTH = 6
 
         /**
          * Packages that handle money or credentials.
@@ -191,6 +220,9 @@ class PolicyEngine(
     }
 
     private val byPackage: Map<String, AppFacts> = apps.associateBy { it.packageName }
+
+    /** Settings, and anything else that can write a secure setting. */
+    private val settingsSurfaces: Set<String> = settingsPackages + SETTINGS
 
     /** Computed once, from properties of the APK and then from the name list. */
     val sensitive: Set<String> =
@@ -266,6 +298,10 @@ class PolicyEngine(
         if (!call.tool.mutating) return Tier.READ
         val target = targetPackage(call, screen)
         if (isSensitive(target)) return Tier.ALWAYS_CONFIRM
+        // A screen that can change a secure setting asks every time. Neither
+        // Autonomous nor Allow all covers it, because the rows the agent must
+        // never touch are two taps from most of them.
+        if (target != null && settingsSurfaces.contains(target)) return Tier.ALWAYS_CONFIRM
         return Tier.MUTATE
     }
 
@@ -318,6 +354,52 @@ class PolicyEngine(
                 }
             }
         }
+
+        // Every other tool lands on whatever window is in front, and the
+        // agent's own screens are where Autonomous is turned on for good.
+        if (target != null && target.contains(SELF)) {
+            return "the agent may not drive its own screens"
+        }
+
+        val row = forbiddenRow(call, screen)
+        if (row != null) return "\"$row\" is a setting the agent never changes"
+        return null
+    }
+
+    /**
+     * The refused settings, reached by tapping rather than by function.
+     *
+     * Only on a screen that can write a secure setting, and only for the three
+     * tools that act on an element: a coordinate tap has no element to read,
+     * and is covered by the confirm tier instead.
+     */
+    private fun forbiddenRow(
+        call: ToolSchema.ToolCall,
+        screen: ScreenDigest.Digest?,
+    ): String? {
+        if (call.name != ToolSchema.TAP &&
+            call.name != ToolSchema.LONG_PRESS &&
+            call.name != ToolSchema.TYPE
+        ) {
+            return null
+        }
+        if (screen == null || !settingsSurfaces.contains(screen.windowPackage)) return null
+        if (!call.args.has("node_id")) return null
+        val node = screen.node(call.args.optInt("node_id")) ?: return null
+        val text = (node.label + " " + node.resId).lowercase()
+        for (phrase in FORBIDDEN_UI_PARTS) {
+            if (text.contains(phrase)) return phrase
+        }
+        // Whole words for the key spellings, so "Clock" is not "lock".
+        val words = tokens(text)
+        for (part in FORBIDDEN_KEY_PARTS) {
+            val parts = tokens(part)
+            if (parts.size > 1) {
+                if (containsSequence(words, parts)) return part
+            } else if (words.contains(part)) {
+                return part
+            }
+        }
         return null
     }
 
@@ -331,14 +413,34 @@ class PolicyEngine(
      */
     fun forbiddenSettingsKey(call: ToolSchema.ToolCall): String? {
         if (call.name != ToolSchema.CALL_FUNCTION) return null
-        if (call.args.optString("package") != SETTINGS) return null
-        if (!call.args.optString("function").lowercase().startsWith("set")) return null
+        // No package pin and no "set" prefix: a vendor settings app, a
+        // function called updateX, or a key one level down all changed the
+        // same setting and none of them was looked at.
         val params = call.args.optJSONObject("params") ?: return null
-        for (name in KEY_PARAMS) {
-            val value = params.opt(name) as? String ?: continue
-            val lower = value.lowercase()
-            for (part in FORBIDDEN_KEY_PARTS) {
-                if (lower.contains(part)) return value
+        return forbiddenValue(params, 0)
+    }
+
+    /** Every string in a function's parameters, however deep it is nested. */
+    private fun forbiddenValue(value: Any?, depth: Int): String? {
+        if (depth > MAX_PARAM_DEPTH) return null
+        when (value) {
+            is String -> {
+                val lower = value.lowercase()
+                for (part in FORBIDDEN_KEY_PARTS) {
+                    if (lower.contains(part)) return value
+                }
+            }
+            is org.json.JSONObject -> {
+                val names = value.keys()
+                while (names.hasNext()) {
+                    val name = names.next() as? String ?: continue
+                    forbiddenValue(value.opt(name), depth + 1)?.let { return it }
+                }
+            }
+            is org.json.JSONArray -> {
+                for (i in 0 until value.length()) {
+                    forbiddenValue(value.opt(i), depth + 1)?.let { return it }
+                }
             }
         }
         return null
