@@ -300,7 +300,7 @@ class BrainSettingsActivity : Activity() {
         testResult.setText(R.string.brain_test_running)
         val snapshot = config
         worker.execute {
-            val client = OpenAiCompatClient(snapshot, { ApiKeyStore.get(this) })
+            val client = OpenAiCompatClient(snapshot, { ApiKeyStore.lookup(this) })
             val outcome =
                 client.complete(
                     "",

@@ -70,6 +70,7 @@ java_library_host {
         "src/com/bestrom/agent/bridge/Peer.kt",
         "src/com/bestrom/agent/bridge/RateLimiter.kt",
         "src/com/bestrom/agent/audit/AuditBounds.kt",
+        "src/com/bestrom/agent/brain/ApiKey.kt",
         "src/com/bestrom/agent/brain/BrainConfig.kt",
         "src/com/bestrom/agent/brain/BrainError.kt",
         "src/com/bestrom/agent/brain/ChatRequest.kt",

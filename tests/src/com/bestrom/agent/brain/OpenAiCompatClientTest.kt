@@ -78,12 +78,13 @@ class OpenAiCompatClientTest {
     private fun baseUrl(): String = "http://127.0.0.1:" + server.address.port + "/v1"
 
     private fun client(
-        key: String? = "sk-test-000",
+        key: ApiKey = ApiKey.Present("sk-test-000"),
         url: String = baseUrl(),
+        preset: BrainPreset = BrainPreset.GROQ,
     ): OpenAiCompatClient =
         OpenAiCompatClient(
             BrainConfig(
-                preset = BrainPreset.LLAMA_CPP,
+                preset = preset,
                 baseUrl = url,
                 model = "a-model",
             ),
@@ -212,11 +213,31 @@ class OpenAiCompatClientTest {
     @Test
     fun anEmptyKeyBecomesThePlaceholderTheLanServersWant() {
         replies = listOf(Reply(200, okBody()))
-        call(client(key = null))
+        call(client(key = ApiKey.Absent, preset = BrainPreset.LLAMA_CPP))
         val sent = headers[0].mapKeys { it.key.lowercase() }
         // Ollama requires the header and ignores the value; llama.cpp only
         // wants one when it was started with --api-key.
         assertEquals(listOf("Bearer local"), sent["authorization"])
+    }
+
+    @Test
+    fun aKeyStoredForACloudPresetIsNeverSentToALanServer() {
+        replies = listOf(Reply(200, okBody()))
+        // The key is still in the store; the preset is a LAN server now.
+        call(client(key = ApiKey.Present("sk-live-123"), preset = BrainPreset.OLLAMA))
+        val sent = headers[0].mapKeys { it.key.lowercase() }
+        assertEquals(listOf("Bearer local"), sent["authorization"])
+        assertFalse(bodies[0].contains("sk-live-123"))
+    }
+
+    @Test
+    fun aKeyThatWillNotUnsealIsItsOwnSentenceAndSendsNothing() {
+        val outcome = call(client(key = ApiKey.Unavailable))
+        assertTrue(fail(outcome) is BrainError.KeyUnavailable)
+        assertEquals(0, requests.get())
+        // And a preset that needs a key with nothing stored says so.
+        assertTrue(fail(call(client(key = ApiKey.Absent))) is BrainError.KeyMissing)
+        assertEquals(0, requests.get())
     }
 
     @Test

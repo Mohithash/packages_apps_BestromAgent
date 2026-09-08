@@ -61,6 +61,19 @@ sealed class BrainError(val sentence: String) {
     /** Stop was pressed while the call was in flight. */
     object Cancelled : BrainError("Stopped.")
 
+    /** This endpoint needs a key and none is stored. */
+    object KeyMissing : BrainError("This endpoint needs an API key; none is set.")
+
+    /**
+     * A key is stored and could not be unsealed.
+     *
+     * Distinct from a missing key on purpose: the keystore entry is bound to
+     * an unlocked device, so this is usually a phone that just locked and not
+     * a key the user has to replace.
+     */
+    object KeyUnavailable :
+        BrainError("The key could not be unsealed; unlock the phone and try again.")
+
     companion object {
         /** How much of a provider's error message is ever shown. */
         const val MAX_DETAIL = 200

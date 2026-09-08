@@ -103,31 +103,30 @@ object ApiKeyStore {
         }
     }
 
-    /** The key, or null when there is none and when anything at all went wrong. */
-    fun get(context: Context): String? =
-        try {
-            val target = file(context)
-            if (!target.exists()) {
-                null
-            } else {
-                val blob = target.readBytes()
-                val iv = Envelope.iv(blob)
-                val ciphertext = Envelope.ciphertext(blob)
-                if (iv == null || ciphertext == null) {
-                    null
-                } else {
-                    val cipher = Cipher.getInstance(TRANSFORM)
-                    cipher.init(
-                        Cipher.DECRYPT_MODE,
-                        existingKey(),
-                        GCMParameterSpec(Envelope.TAG_BITS, iv),
-                    )
-                    String(cipher.doFinal(ciphertext), Charsets.UTF_8)
-                }
-            }
+    /**
+     * The key, or which of the two ways there is not one.
+     *
+     * "Nothing stored" and "stored and it would not open" are different
+     * sentences to the user and different decisions for the client, so they
+     * are not both null here.
+     */
+    fun lookup(context: Context): ApiKey {
+        val target = file(context)
+        if (!target.exists() || target.length() < Envelope.MIN_BYTES) return ApiKey.Absent
+        return try {
+            val blob = target.readBytes()
+            val iv = Envelope.iv(blob) ?: return ApiKey.Unavailable
+            val ciphertext = Envelope.ciphertext(blob) ?: return ApiKey.Unavailable
+            val key = existingKey() ?: return ApiKey.Unavailable
+            val cipher = Cipher.getInstance(TRANSFORM)
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(Envelope.TAG_BITS, iv))
+            ApiKey.Present(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
         } catch (e: Exception) {
-            null
+            // A wiped keystore, a locked device, a truncated file: all of them
+            // are "there is something here and it did not open".
+            ApiKey.Unavailable
         }
+    }
 
     /** Removes the ciphertext and the keystore entry it was sealed to. */
     fun clear(context: Context) {

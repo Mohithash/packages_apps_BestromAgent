@@ -19,9 +19,9 @@ package com.bestrom.agent.brain
 
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import com.bestrom.agent.runner.InjectionFilter
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
-import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Random
@@ -42,7 +42,7 @@ import org.json.JSONArray
  */
 class OpenAiCompatClient(
     private val config: BrainConfig,
-    private val keySupplier: () -> String?,
+    private val keySupplier: () -> ApiKey,
     private val sleeper: (Long) -> Unit = { if (it > 0) Thread.sleep(it) },
     private val jitter: (Long) -> Long = { defaultJitter(it) },
 ) {
@@ -51,8 +51,21 @@ class OpenAiCompatClient(
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 60_000
 
-        /** How much of a response body is ever read into memory. */
-        const val MAX_BODY_BYTES = 4 * 1024 * 1024
+        /**
+         * How much of a response body is ever read into memory.
+         *
+         * No chat completion this client asks for comes close: the ceiling is
+         * against an endpoint answering with something else entirely.
+         */
+        const val MAX_BODY_BYTES = 1024 * 1024
+
+        /**
+         * What the two LAN servers are sent instead of a key.
+         *
+         * Ollama requires the header and ignores its value; llama.cpp only
+         * needs one when it was started with --api-key.
+         */
+        const val LOCAL_KEY = "local"
 
         /** 429 and 5xx: three attempts, and never more than half a minute of waiting. */
         const val MAX_SERVER_ATTEMPTS = 3
@@ -66,6 +79,15 @@ class OpenAiCompatClient(
 
         /** Anthropic's overloaded, treated exactly like 503. */
         const val HTTP_OVERLOADED = 529
+
+        /**
+         * The only statuses worth sending the same request again for.
+         *
+         * Named rather than "429 or anything above 500": 501 and 505 are
+         * permanent, and retrying them costs two more requests and up to half
+         * a minute of backoff before the same answer.
+         */
+        val RETRY_STATUS: Set<Int> = setOf(429, 500, 502, 503, HTTP_OVERLOADED)
 
         private val random = Random()
 
@@ -136,6 +158,11 @@ class OpenAiCompatClient(
         if (rejection != null) {
             return Outcome.Fail(BrainError.Network("base url refused", rejection), 0)
         }
+        val authorization =
+            when (val bearer = bearer()) {
+                is Bearer.Failed -> return Outcome.Fail(bearer.error, elapsed(started))
+                is Bearer.Header -> bearer.value
+            }
         val body = ChatRequest.build(config, systemPrompt, messages, tools, maxTokens).toString()
         val bytes = body.toByteArray(Charsets.UTF_8)
 
@@ -147,7 +174,7 @@ class OpenAiCompatClient(
 
         while (true) {
             if (cancelled) return Outcome.Fail(BrainError.Cancelled, elapsed(started))
-            val attempt = send(bytes)
+            val attempt = send(bytes, authorization)
 
             when (attempt) {
                 is Attempt.Body -> {
@@ -175,7 +202,7 @@ class OpenAiCompatClient(
                     ) {
                         return Outcome.Fail(BrainError.Unauthorized, elapsed(started))
                     }
-                    if (status == 429 || status >= 500) {
+                    if (RETRY_STATUS.contains(status)) {
                         serverAttempts++
                         val fromHeader = retryAfterMs(attempt.retryAfter, System.currentTimeMillis())
                         val wait = fromHeader ?: jitter(backoff)
@@ -230,19 +257,28 @@ class OpenAiCompatClient(
         object Cancelled : Attempt()
     }
 
-    private fun send(bytes: ByteArray): Attempt {
+    private fun send(bytes: ByteArray, authorization: String): Attempt {
         var wrote = false
         var connection: HttpURLConnection? = null
         try {
-            val url = URL(config.endpoint())
+            // One parse, and both facts read off the same object. The check
+            // and the socket must not be able to disagree about which host
+            // this is: that disagreement is how a key leaves in cleartext.
+            val url = BrainUrl.parse(config.endpoint())
+                ?: return Attempt.Unreachable("the endpoint is not a URL")
+            val https = url.protocol.equals("https", ignoreCase = true)
+            val host = BrainUrl.hostOf(url) ?: return Attempt.Unreachable("the endpoint has no host")
+            if (!https && !BrainUrl.isPrivateHost(host)) {
+                return Attempt.Unreachable("plain http to a public address")
+            }
             val opened =
                 url.openConnection() as? HttpURLConnection
                     ?: return Attempt.Unreachable("the endpoint is not http")
             connection = opened
             // The presence of this cast is also the verify gate's evidence that
             // the app rides the platform TLS stack and not a raw socket.
-            if (opened !is HttpsURLConnection && !BrainUrl.isPrivateHost(config.host())) {
-                return Attempt.Unreachable("plain http to a public address")
+            if (https && opened !is HttpsURLConnection) {
+                return Attempt.Unreachable("the https endpoint did not open a TLS connection")
             }
             live = opened
             opened.requestMethod = "POST"
@@ -256,7 +292,7 @@ class OpenAiCompatClient(
             opened.setFixedLengthStreamingMode(bytes.size)
             opened.setRequestProperty("Content-Type", "application/json")
             opened.setRequestProperty("Accept", "application/json")
-            opened.setRequestProperty("Authorization", "Bearer " + bearer())
+            opened.setRequestProperty("Authorization", "Bearer " + authorization)
             if (config.preset == BrainPreset.ANTHROPIC && config.workspaceId.isNotEmpty()) {
                 opened.setRequestProperty("anthropic-workspace-id", config.workspaceId)
             }
@@ -285,15 +321,32 @@ class OpenAiCompatClient(
         }
     }
 
+    /** What goes in the Authorization header, or the reason there is nothing. */
+    private sealed class Bearer {
+        class Header(val value: String) : Bearer()
+
+        class Failed(val error: BrainError) : Bearer()
+    }
+
     /**
-     * Ollama requires the header and ignores its value; llama.cpp only needs
-     * one when it was started with --api-key. A placeholder keeps both working
-     * without asking the user for a key that does not exist.
+     * The key for this endpoint, resolved once before a socket is opened.
+     *
+     * A key stored for a cloud preset never reaches a LAN server: the two
+     * local presets speak the placeholder and nothing else, whatever is in the
+     * store when the preset changes.
      */
-    private fun bearer(): String {
-        val key = keySupplier()
-        if (!key.isNullOrEmpty()) return key
-        return "local"
+    private fun bearer(): Bearer {
+        if (config.preset.local) return Bearer.Header(LOCAL_KEY)
+        return when (val key = keySupplier()) {
+            is ApiKey.Present -> Bearer.Header(key.value)
+            ApiKey.Absent ->
+                if (config.preset.keyRequired) Bearer.Failed(BrainError.KeyMissing)
+                else Bearer.Header(LOCAL_KEY)
+            // A key that is stored and cannot be opened is not a missing key,
+            // and sending the placeholder instead would report the provider's
+            // 401 as a bad key the user would then replace for nothing.
+            ApiKey.Unavailable -> Bearer.Failed(BrainError.KeyUnavailable)
+        }
     }
 
     private fun read(stream: InputStream): String {
@@ -305,19 +358,27 @@ class OpenAiCompatClient(
             if (n < 0) break
             val room = MAX_BODY_BYTES - total
             if (room <= 0) break
-            out.write(buffer, 0, minOf(n, room))
-            total += n
+            val written = minOf(n, room)
+            out.write(buffer, 0, written)
+            // What was kept, not what was read: counting the read overshoots
+            // the ceiling by up to one buffer.
+            total += written
         }
         return out.toString(Charsets.UTF_8.name())
     }
 
-    /** The provider's own error.message, and only that, truncated. */
+    /** The provider's own error.message, and only that, sanitised and truncated. */
     private fun providerMessage(text: String): String =
         try {
             val root = org.json.JSONObject(text)
             val error = root.optJSONObject("error")
-            val message = error?.optString("message") ?: root.optString("message")
-            message.take(BrainError.MAX_DETAIL)
+            // optString answers "" and never null, so the elvis never fired
+            // for a provider that put its text at the top level beside an
+            // empty error object.
+            val message =
+                error?.optString("message")?.ifEmpty { null } ?: root.optString("message")
+            // The endpoint chooses this text and the transcript renders it.
+            InjectionFilter.sanitise(message, BrainError.MAX_DETAIL)
         } catch (e: Exception) {
             ""
         }

@@ -292,7 +292,7 @@ class AgentRunner(
 
     /** One model call, with the errors it can end a task on. */
     private fun think(): ChatResponse? {
-        val brain = OpenAiCompatClient(config, { ApiKeyStore.get(context) })
+        val brain = OpenAiCompatClient(config, { ApiKeyStore.lookup(context) })
         client = brain
         val started = System.currentTimeMillis()
         val outcome =

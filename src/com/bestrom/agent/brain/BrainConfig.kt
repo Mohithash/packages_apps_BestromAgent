@@ -178,42 +178,74 @@ data class BrainConfig(
  * https everywhere, with exactly one exception: a literal private, loopback or
  * link-local address, which is the llama.cpp and Ollama case and the only
  * configuration that sends nothing off the user's own network.
+ *
+ * The host is read with java.net.URL and never by hand. A hand parser that
+ * ends the authority one character later than the parser which opens the
+ * socket is not a style difference: "http://evil.example.com#@127.0.0.1/v1"
+ * reads as private to one and as evil.example.com to the other, and the key
+ * goes to the second one in cleartext.
  */
 object BrainUrl {
+
+    /**
+     * Characters with no legitimate use in a chat-completions base URL.
+     *
+     * A fragment or a query is where the two parsers disagree, a backslash is
+     * where a browser and a library disagree, and whitespace hides both.
+     */
+    private val FORBIDDEN = charArrayOf('#', '?', '\\')
 
     /** null when the URL is usable, otherwise the sentence to show the user. */
     @JvmStatic
     fun reject(baseUrl: String): String? {
         val url = baseUrl.trim()
         if (url.isEmpty()) return "The base URL is empty."
-        val scheme = url.substringBefore("://", "").lowercase()
-        if (scheme != "https" && scheme != "http") {
+        for (c in url) {
+            if (c.isWhitespace()) return "The base URL must not contain spaces."
+        }
+        for (c in FORBIDDEN) {
+            if (url.indexOf(c) >= 0) return "The base URL must not contain \"$c\"."
+        }
+        val lower = url.lowercase()
+        val https = lower.startsWith("https://")
+        if (!https && !lower.startsWith("http://")) {
             return "The base URL must start with https:// or http://."
         }
-        val host = hostOf(url) ?: return "That base URL has no host."
-        if (url.endsWith("/chat/completions")) {
+        val parsed = parse(url) ?: return "That base URL cannot be read."
+        if (!parsed.userInfo.isNullOrEmpty()) {
+            return "The base URL must not carry a user name or a password."
+        }
+        val host = hostOf(parsed) ?: return "That base URL has no host."
+        if (lower.endsWith("/chat/completions")) {
             return "Leave off /chat/completions; it is added for you."
         }
-        if (scheme == "http" && !isPrivateHost(host)) {
+        if (!https && !isPrivateHost(host)) {
             return "Plain http is only allowed to a server on your own network."
         }
         return null
     }
 
+    /** The platform's parser, or null when it will not have it. */
+    @JvmStatic
+    fun parse(url: String): java.net.URL? =
+        try {
+            java.net.URL(url)
+        } catch (e: Exception) {
+            null
+        }
+
+    /** The host java.net.URL reports, lowercased and without IPv6 brackets. */
+    @JvmStatic
+    fun hostOf(url: java.net.URL): String? {
+        val host = url.host ?: return null
+        return host.removeSurrounding("[", "]").lowercase().ifEmpty { null }
+    }
+
     /** The host part of a base URL, without the port or the brackets. */
     @JvmStatic
     fun hostOf(baseUrl: String): String? {
-        val afterScheme = baseUrl.substringAfter("://", "")
-        if (afterScheme.isEmpty()) return null
-        val authority = afterScheme.substringBefore('/').substringAfter('@')
-        if (authority.isEmpty()) return null
-        if (authority.startsWith("[")) {
-            val end = authority.indexOf(']')
-            if (end <= 1) return null
-            return authority.substring(1, end).lowercase()
-        }
-        val host = authority.substringBefore(':')
-        return host.ifEmpty { null }?.lowercase()
+        val parsed = parse(baseUrl.trim()) ?: return null
+        return hostOf(parsed)
     }
 
     /**
@@ -225,9 +257,10 @@ object BrainUrl {
     fun isPrivateHost(host: String): Boolean {
         val h = host.lowercase()
         if (h == "localhost" || h == "::1" || h == "0:0:0:0:0:0:0:1") return true
-        if (h.contains(':')) {
+        val colon = h.indexOf(':')
+        if (colon >= 0) {
             // IPv6: unique local fc00::/7 and link local fe80::/10.
-            val first = h.substringBefore(':')
+            val first = h.take(colon)
             if (first.isEmpty()) return false
             val group = first.toIntOrNull(16) ?: return false
             if (group ushr 9 == 0x7e) return true // fc00::/7

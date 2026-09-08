@@ -93,17 +93,22 @@ class ChatResponse(
             val calls = ArrayList<ToolCall>()
             val toolCalls = message.optJSONArray("tool_calls")
             if (toolCalls != null) {
+                // Two calls sharing one id become two tool messages with the
+                // same tool_call_id: some compatibility layers answer 400 for
+                // that and one silently drops the second reply.
+                val ids = HashSet<String>()
                 for (i in 0 until toolCalls.length()) {
                     val c = toolCalls.optJSONObject(i) ?: continue
                     val function = c.optJSONObject("function") ?: continue
                     val name = function.optString("name")
                     if (name.isEmpty()) continue
+                    var id = c.optString("id").ifEmpty { "call_$i" }
+                    if (!ids.add(id)) {
+                        id = "call_$i"
+                        while (!ids.add(id)) id += "_"
+                    }
                     calls.add(
-                        ToolCall(
-                            c.optString("id").ifEmpty { "call_$i" },
-                            name,
-                            function.optString("arguments").ifEmpty { "{}" },
-                        )
+                        ToolCall(id, name, function.optString("arguments").ifEmpty { "{}" })
                     )
                 }
             }
