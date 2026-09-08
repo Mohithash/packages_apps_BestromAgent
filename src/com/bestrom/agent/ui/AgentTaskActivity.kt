@@ -24,6 +24,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -49,12 +50,6 @@ import com.bestrom.agent.runner.TaskState
 class AgentTaskActivity : Activity() {
 
     companion object {
-        /**
-         * The one prefill this screen honours, and only from this same app -
-         * the goal row on the Agent mode screen.
-         */
-        const val EXTRA_GOAL = "com.bestrom.agent.extra.GOAL"
-
         private const val REFRESH_MS = 400L
     }
 
@@ -84,6 +79,12 @@ class AgentTaskActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // The step lines name what the agent read on screen, so this window
+        // does not belong in a screenshot or in the Recents snapshot.
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE,
+        )
         setContentView(R.layout.activity_agent_task)
         setTitle(R.string.agent_task_title)
         actionBar?.setDisplayHomeAsUpEnabled(true)
@@ -105,22 +106,6 @@ class AgentTaskActivity : Activity() {
 
         runButton.setOnClickListener { start() }
         stopButton.setOnClickListener { AgentState.bridge?.stopTask() }
-
-        prefillFromOurselves()
-    }
-
-    /**
-     * The only text this screen ever accepts from an Intent.
-     *
-     * getCallingPackage() is non-null only for startActivityForResult, so the
-     * Agent mode screen starts this one that way on purpose: an ordinary
-     * startActivity, which is all another app can do through the assist
-     * filter, leaves it null and the field stays empty.
-     */
-    private fun prefillFromOurselves() {
-        if (callingPackage != packageName) return
-        val goal = intent?.getStringExtra(EXTRA_GOAL) ?: return
-        goalField.setText(goal)
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -189,7 +174,9 @@ class AgentTaskActivity : Activity() {
         runButton.visibility = if (running) View.GONE else View.VISIBLE
         stopButton.visibility = if (running) View.VISIBLE else View.GONE
         goalField.visibility = if (running) View.GONE else View.VISIBLE
-        endpointNote.visibility = if (running) View.GONE else View.VISIBLE
+        // Kept on screen while the task runs: it says where what the agent is
+        // reading right now is going, which is when it matters.
+        endpointNote.visibility = View.VISIBLE
         endpointNote.text = getString(R.string.task_endpoint_note, config.host())
 
         if (task != null) {
@@ -207,6 +194,9 @@ class AgentTaskActivity : Activity() {
     }
 
     private fun showOff(message: Int, button: Int, action: () -> Unit) {
+        // A sheet raised before Agent mode went off would otherwise sit over
+        // this screen with nothing behind it to answer.
+        maybeShowSheet(false)
         offGroup.visibility = View.VISIBLE
         taskGroup.visibility = View.GONE
         offMessage.setText(message)

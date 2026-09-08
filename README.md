@@ -342,13 +342,29 @@ task does not widen it.
 
 ## Where the screen goes
 
-A running task sends the screen digest - element labels, text, resource ids - to
-whatever endpoint the user configured, with the user's key. That is the honest
-cost of a cloud brain and the settings screen says it above the fold. The LAN
-preset is the answer for anyone who does not want that: one base URL change and
-nothing leaves the network.
+While a task runs, everything the agent reads is sent to the endpoint the user
+configured, with the user's key: the text of every screen it looks at, element
+labels and resource ids, any notification text on screen, the name and label of
+every installed app, and every app function the phone publishes. The app list and
+the function catalogue go once per task even if the agent never opens those apps.
+Screen contents go on every step as text, and as a PNG if screenshots are on.
+Password fields are the one exclusion. Nothing is kept on the phone: no
+transcript is written to disk, and the audit log records only the method, the
+model id and why a task ended.
 
-The audit log gains three entries per task: `agent.start`, one `brain.call` per
-model call with the model id as its target, and `agent.end` with the reason the
-task ended. The goal is text the user typed, so it is not one of them, and
-neither is anything that was on screen.
+That paragraph is the intro on the Brain screen, above the first row rather than
+under the last one, and the task screen keeps the line naming the endpoint on
+screen while a task is running - which is when it matters. What the endpoint does
+with what it receives is between the user and that provider; BestROM runs none of
+them. A llama.cpp or Ollama server on the user's own network is the setup that
+sends nothing off it.
+
+The audit log gains four entries per task: `agent.start`, one `brain.call` per
+model call with the model id as its target, `agent.refused` for every call the
+policy engine refused, with the tool name as its target, and `agent.end` with the
+reason the task ended. The goal is text the user typed, so it is not one of them,
+and neither is anything that was on screen.
+
+The step lines the task screen shows are cleared when the task ends - only the
+ending line stays, because it is the answer - and the window sets `FLAG_SECURE`,
+so what the agent read is not in the Recents snapshot either.

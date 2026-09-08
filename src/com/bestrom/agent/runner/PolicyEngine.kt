@@ -470,10 +470,14 @@ class PolicyEngine(
                 else -> call.name
             }
 
+        val resId = node?.resId.orEmpty()
         val where =
             when {
                 target == null -> ""
-                else -> label(target) + " (" + target + ")"
+                // Two rows with the same label are told apart by this and by
+                // nothing else on the sheet.
+                resId.isEmpty() -> label(target) + " (" + target + ")"
+                else -> label(target) + " (" + target + ")  #" + resId
             }
         return Pair(what, where)
     }

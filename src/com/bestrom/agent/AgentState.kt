@@ -113,6 +113,20 @@ object AgentState {
         steps.clear()
     }
 
+    /**
+     * Drops everything a finished task read, keeping only how it ended.
+     *
+     * The step lines carry text the agent read on other apps' screens, and
+     * this activity can be brought forward by anything. The last line is the
+     * answer the user is waiting for, so it stays until the next task starts.
+     */
+    @Synchronized
+    fun keepEndingOnly() {
+        val ending = steps.lastOrNull { it.kind == StepEvent.Kind.DONE }
+        steps.clear()
+        if (ending != null) steps.add(ending)
+    }
+
     fun reset() {
         bridgeLive.set(false)
         paired.set(false)

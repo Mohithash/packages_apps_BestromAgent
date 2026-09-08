@@ -127,11 +127,8 @@ class AgentSettingsActivity : Activity() {
             main.postDelayed({ render() }, 150)
         }
 
-        // startActivityForResult, not startActivity: it is the only way the
-        // task screen can tell that the caller was this app, which is what
-        // lets it accept a prefilled goal from here and from nowhere else.
         askRow.setOnClickListener {
-            startActivityForResult(Intent(this, AgentTaskActivity::class.java), 2)
+            startActivity(Intent(this, AgentTaskActivity::class.java))
         }
         brainRow.setOnClickListener {
             startActivity(Intent(this, BrainSettingsActivity::class.java))

@@ -655,11 +655,21 @@ class AgentRunner(
             else -> "ok"
         }
 
-    /** One line for the transcript the user reads. */
+    /**
+     * One line for the transcript the user reads.
+     *
+     * describe() already starts with a verb, so the tool name in front of it
+     * read as "tap  Tap Battery saver". The resource id goes on the end, which
+     * is what tells two rows with the same label apart.
+     */
     private fun describe(call: ToolSchema.ToolCall): String {
         val engine = policy ?: return call.name
         val described = engine.describe(call, dispatch.digest)
-        return call.name + "  " + described.first
+        val node =
+            if (call.args.has("node_id")) dispatch.digest?.node(call.args.optInt("node_id"))
+            else null
+        val resId = node?.resId.orEmpty()
+        return if (resId.isEmpty()) described.first else described.first + "  #" + resId
     }
 
     /** The identity a repeated call is recognised by. */
@@ -681,7 +691,15 @@ class AgentRunner(
         task.state = TaskState.FINISHED
         host.audit.append("agent.end", reason, "ok", null,
             System.currentTimeMillis() - task.startedMs, AuditLog.UID_AGENT, 0)
-        step(0, StepEvent.Kind.DONE, task.ending())
+        // The step number, not a dash: the ending is the last line of a run
+        // and the user wants to see where in the run it happened. And when no
+        // endpoint sent a usage block, the token count was a guess; say so
+        // rather than showing a number that looks measured.
+        step(
+            task.step,
+            StepEvent.Kind.DONE,
+            task.ending() + if (guard.estimated) "  (tokens estimated)" else "",
+        )
         notify(Mode.IDLE, "", 0)
     }
 

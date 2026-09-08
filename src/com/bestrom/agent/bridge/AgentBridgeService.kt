@@ -255,6 +255,8 @@ class AgentBridgeService : Service(), Methods.Host {
     }
 
     private fun onTaskFinished() {
+        // What the task read goes with the task; the ending line stays.
+        AgentState.keepEndingOnly()
         AgentState.task = null
         AgentState.confirm = null
         runner = null
@@ -620,6 +622,7 @@ class AgentBridgeService : Service(), Methods.Host {
         AgentState.task = null
         AgentState.confirm = null
         AgentState.bridge = null
+        AgentState.clearSteps()
         AgentState.paired.set(false)
         auth.clear()
         auth.setCodeListener(null)
