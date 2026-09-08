@@ -451,6 +451,7 @@ object Methods {
         if (!host.functions.isInstalled(pkg)) {
             throw JsonRpc.RpcException(JsonRpc.NOT_INSTALLED, "no such package")
         }
+        refuseDenied(host, pkg)
         val timeout = params.optLong("timeout_ms", 30000L).coerceIn(1L, 120000L)
         val callParams = params.optJSONObject("params") ?: JSONObject()
 
@@ -730,6 +731,7 @@ object Methods {
             if (!host.functions.isInstalled(pkg)) {
                 throw JsonRpc.RpcException(JsonRpc.NOT_INSTALLED, "no such package")
             }
+            refuseDenied(host, pkg)
             intent =
                 pm.getLaunchIntentForPackage(pkg)
                     ?: throw JsonRpc.RpcException(JsonRpc.ACTION_FAILED, "the package has no launcher entry")
@@ -740,6 +742,7 @@ object Methods {
             if (!host.functions.isInstalled(component.packageName)) {
                 throw JsonRpc.RpcException(JsonRpc.NOT_INSTALLED, "no such package")
             }
+            refuseDenied(host, component.packageName)
             intent = Intent(Intent.ACTION_MAIN).setComponent(component)
         } else {
             val parsed =
@@ -773,6 +776,10 @@ object Methods {
         val resolved =
             intent.resolveActivity(pm)
                 ?: throw JsonRpc.RpcException(JsonRpc.ACTION_FAILED, "nothing resolves that intent")
+        // The intent_uri form names its destination in four different places,
+        // so the exclusion is checked against what the platform actually
+        // resolved rather than against what the caller wrote.
+        refuseDenied(host, resolved.packageName)
         try {
             host.context.startActivity(intent)
         } catch (e: Exception) {
