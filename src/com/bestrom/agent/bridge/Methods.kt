@@ -412,7 +412,9 @@ object Methods {
         host.onAuthenticated()
         return JSONObject()
             .put("token", outcome.token)
-            .put("expires_utc", utc(outcome.expiresAtMs))
+            // The CODE's expiry, not the pairing's: the token lives as long as
+            // the bridge does. The name says which.
+            .put("code_expires_utc", utc(outcome.expiresAtMs))
             .put("capabilities", capabilitiesJson())
     }
 
@@ -495,10 +497,14 @@ object Methods {
                 ?: throw JsonRpc.RpcException(JsonRpc.AGENT_DISABLED, "not connected")
         val maxDepth = params.optInt("max_depth", TreeSerializer.DEFAULT_MAX_DEPTH).coerceIn(1, 100)
         val maxNodes = params.optInt("max_nodes", TreeSerializer.DEFAULT_MAX_NODES).coerceIn(1, 5000)
-        val includeInvisible = params.optBoolean("include_invisible", false)
+        // The invisible half of a tree was a surface with no caller; it is
+        // gone rather than left implemented and unreachable.
+        if (params.optBoolean("include_invisible", false)) {
+            throw JsonRpc.RpcException(JsonRpc.INVALID_PARAMS, "include_invisible is not supported")
+        }
         refuseDenied(host, service.activeWindowPackage())
         val snapshot =
-            service.snapshot(maxDepth, maxNodes, includeInvisible)
+            service.snapshot(maxDepth, maxNodes)
                 ?: throw JsonRpc.RpcException(
                     JsonRpc.AGENT_DISABLED,
                     "there is no active window to read",
@@ -545,30 +551,34 @@ object Methods {
         val node = resolveNode(params)
         refuseDenied(host, node?.packageName?.toString() ?: service.activeWindowPackage())
         if (node != null) {
-            if (Actions.clickNode(node)) {
-                return JSONObject()
-                    .put("ok", true)
-                    .put("method", "node")
-                    .put("target", node.viewIdResourceName ?: node.className?.toString() ?: "node")
-            }
+            if (Actions.clickNode(node)) return acted("node", nameOf(node))
             val centre = centreOf(node)
             if (!Actions.tapGesture(service, centre[0], centre[1])) {
                 throw JsonRpc.RpcException(JsonRpc.ACTION_FAILED, "the tap did not take effect")
             }
-            return JSONObject()
-                .put("ok", true)
-                .put("method", "gesture")
-                .put("target", centre[0].toString() + "," + centre[1])
+            return acted("gesture", pointName(centre))
         }
         val point = requirePoint(service, params)
         if (!Actions.tapGesture(service, point[0], point[1])) {
             throw JsonRpc.RpcException(JsonRpc.ACTION_FAILED, "the tap did not take effect")
         }
-        return JSONObject()
-            .put("ok", true)
-            .put("method", "gesture")
-            .put("target", point[0].toString() + "," + point[1])
+        return acted("gesture", pointName(point))
     }
+
+    /**
+     * The shape ui.tap and ui.long_press both answer with.
+     *
+     * `via` says whether the node action took it or a synthetic gesture did,
+     * which is the one useful fact when something "succeeded" and nothing
+     * happened. It is not called `method`: that is the JSON-RPC method name.
+     */
+    private fun acted(via: String, target: String): JSONObject =
+        JSONObject().put("ok", true).put("via", via).put("target", target)
+
+    private fun nameOf(node: android.view.accessibility.AccessibilityNodeInfo): String =
+        node.viewIdResourceName ?: node.className?.toString() ?: "node"
+
+    private fun pointName(point: IntArray): String = point[0].toString() + "," + point[1]
 
     private fun uiLongPress(host: Host, session: Session, params: JSONObject): JSONObject {
         val service =
@@ -577,18 +587,18 @@ object Methods {
         val duration = params.optInt("duration_ms", 600).coerceIn(1, 3000)
         val node = resolveNode(params)
         if (node != null) {
-            if (Actions.longClickNode(node)) return JSONObject().put("ok", true)
+            if (Actions.longClickNode(node)) return acted("node", nameOf(node))
             val centre = centreOf(node)
             if (!Actions.longPressGesture(service, centre[0], centre[1], duration)) {
                 throw JsonRpc.RpcException(JsonRpc.ACTION_FAILED, "the long press did not take effect")
             }
-            return JSONObject().put("ok", true)
+            return acted("gesture", pointName(centre))
         }
         val point = requirePoint(service, params)
         if (!Actions.longPressGesture(service, point[0], point[1], duration)) {
             throw JsonRpc.RpcException(JsonRpc.ACTION_FAILED, "the long press did not take effect")
         }
-        return JSONObject().put("ok", true)
+        return acted("gesture", pointName(point))
     }
 
     private fun requirePoint(
@@ -669,7 +679,10 @@ object Methods {
     private fun uiScreenshot(host: Host, session: Session, params: JSONObject): JSONObject {
         val service =
             AgentState.a11y ?: throw JsonRpc.RpcException(JsonRpc.AGENT_DISABLED, "not connected")
-        val encoding = params.optString("encoding", "base64")
+        // base64 is the only encoding; the size-only probe had no caller.
+        if (params.has("encoding") && params.optString("encoding") != "base64") {
+            throw JsonRpc.RpcException(JsonRpc.INVALID_PARAMS, "encoding must be base64")
+        }
         refuseDenied(host, service.activeWindowPackage())
         val outcome = Actions.screenshot(service, host.callbackExecutor)
         if (outcome.png == null) {
@@ -689,15 +702,11 @@ object Methods {
                 JSONObject().put("reason", outcome.errorCode),
             )
         }
-        val result =
-            JSONObject()
-                .put("width", outcome.width)
-                .put("height", outcome.height)
-                .put("bytes", outcome.png.size)
-        if (encoding != "none") {
-            result.put("png_base64", Base64.encodeToString(outcome.png, Base64.NO_WRAP))
-        }
-        return result
+        return JSONObject()
+            .put("width", outcome.width)
+            .put("height", outcome.height)
+            .put("bytes", outcome.png.size)
+            .put("png_base64", Base64.encodeToString(outcome.png, Base64.NO_WRAP))
     }
 
     // ------------------------------------------------------------------ app.*

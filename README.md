@@ -60,29 +60,41 @@ batches, no notifications. Requests are capped at 1 MiB, responses at 8 MiB.
 | method | auth | confirm | notes |
 | --- | --- | --- | --- |
 | `agent.hello` | none | no | device and capability report, no user content |
-| `agent.pair` | none | no | six digit code from the phone screen, single use, returns a token |
+| `agent.pair` | none | no | six digit code from the phone screen, single use, returns a token and `code_expires_utc` |
 | `agent.auth` | none | no | re-authenticate with the token already held |
-| `functions.list` | session | no | `searchAppFunctions`, AppSearch as the fallback |
+| `functions.list` | session | no | `searchAppFunctions`, AppSearch as the fallback with a `fallback_reason` |
 | `functions.execute` | session | yes | a `PendingIntent` in the extras is reported, never launched |
-| `ui.tree` | session | no | active window only, compact JSON, password nodes without text, desc or hint |
-| `ui.tap` | session | yes | node action first, gesture fallback |
-| `ui.long_press` | session | yes | |
+| `ui.tree` | session | no | active window and visible nodes only, password nodes without text, desc or hint |
+| `ui.tap` | session | yes | node action first, gesture fallback; answers `via` |
+| `ui.long_press` | session | yes | same result shape as `ui.tap` |
 | `ui.swipe` | session | yes | display pixels |
 | `ui.type` | session | yes | never echoes the text, refuses password fields |
 | `ui.key` | session | yes | back, home, recents, notifications, quick_settings, lock_screen, power_dialog, dismiss_notification_shade |
-| `ui.screenshot` | session | no | PNG, base64; secure areas are blacked out, not refused |
+| `ui.screenshot` | session | no | PNG, base64 always; secure areas are blacked out, not refused |
 | `app.launch` | session | yes | package, component or intent_uri, exactly one; rebuilt, rate limited |
 | `app.list` | session | no | |
 | `log.list` | session | no | the audit log |
 | `log.clear` | session | yes | all or nothing |
 | `agent.stop` | session | yes | runs the full off sequence |
 
+Four result shapes are worth naming, because the host mirrors them exactly:
+`ui.tap` and `ui.long_press` both answer `{ok, via, target}`, where `via` is
+`"node"` or `"gesture"` - it is not called `method`, which is the JSON-RPC
+method name. `agent.pair` returns `code_expires_utc`, the expiry of the six
+digits and not of the pairing. `functions.list` always sends `parameters` and
+`response` as JSON arrays, or leaves them out, so a one-parameter function is
+not shaped differently from a two-parameter one, and it carries
+`fallback_reason` when the AppSearch path ran because the manager path failed.
+There is no `encoding` other than `base64` and no `include_invisible`.
+
 Error codes beyond the JSON-RPC four: `-32001` unauthenticated, `-32002` bad
 pairing code, `-32003` confirm required, `-32004` agent disabled, `-32005` device
 locked, `-32006` user interacting, `-32007` rate limited, `-32008` node not
 found, `-32009` action failed, `-32010` app function error, `-32011` stale tree,
 `-32012` secure window, `-32013` screenshot unavailable, `-32014` timeout,
-`-32015` not installed.
+`-32015` not installed. `-32012` covers a password field and an excluded
+package (`data.reason`); no active window is `-32004` with
+`data.reason = "no_active_window"`, which is a state and not a refusal.
 
 ## The threat model
 

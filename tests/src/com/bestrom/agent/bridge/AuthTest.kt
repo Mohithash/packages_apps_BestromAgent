@@ -43,6 +43,77 @@ class AuthTest {
     }
 
     @Test
+    fun aCodePairsExactlyOnce() {
+        val auth = Auth()
+        auth.start(t0)
+        val code = auth.currentCode()
+        assertTrue(auth.pair(code, t0) is Auth.PairResult.Ok)
+
+        // The code is spent: nothing shows on the screen any more, and the
+        // same digits do not pair a second client inside the ten minutes.
+        assertEquals("", auth.currentCode())
+        assertTrue(auth.pair(code, t0 + 1) is Auth.PairResult.AlreadyPaired)
+    }
+
+    @Test
+    fun aSecondPairIsRefusedWhileATokenIsOut() {
+        val auth = Auth()
+        auth.start(t0)
+        val first = auth.pair(auth.currentCode(), t0) as Auth.PairResult.Ok
+
+        // Even a fresh code does not pair while the first client holds a
+        // token; New code on the phone is what hands the session over.
+        auth.newCode(t0 + 1)
+        assertTrue(auth.pair(auth.currentCode(), t0 + 2) is Auth.PairResult.AlreadyPaired)
+
+        val reissued = auth.reissue(t0 + 3)
+        assertFalse(auth.isPaired())
+        assertFalse(auth.verify(first.token))
+        val second = auth.pair(reissued, t0 + 4)
+        assertTrue(second is Auth.PairResult.Ok)
+        assertFalse(first.token == (second as Auth.PairResult.Ok).token)
+    }
+
+    @Test
+    fun theRotationListenerSeesEveryChange() {
+        val auth = Auth()
+        val seen = ArrayList<String>()
+        var cooldown = 0L
+        auth.setCodeListener { code, cooldownUntilMs ->
+            seen.add(code)
+            cooldown = cooldownUntilMs
+        }
+        auth.start(t0)
+        val issued = auth.currentCode()
+        assertEquals(issued, seen.last())
+
+        // Three wrong codes rotate it, and the listener - not the caller that
+        // happened to lose - is how the screen finds out.
+        val wrong = if (issued == "000000") "111111" else "000000"
+        repeat(3) { auth.pair(wrong, t0) }
+        assertEquals(auth.currentCode(), seen.last())
+        assertFalse(issued == seen.last())
+        assertTrue(cooldown > t0)
+
+        auth.clear()
+        assertEquals("", seen.last())
+    }
+
+    @Test
+    fun reissueLiftsTheCooldown() {
+        val auth = Auth()
+        auth.start(t0)
+        val wrong = if (auth.currentCode() == "000000") "111111" else "000000"
+        repeat(3) { auth.pair(wrong, t0) }
+        assertTrue(auth.pair(auth.currentCode(), t0 + 1) is Auth.PairResult.Cooldown)
+
+        // Otherwise a peer guessing codes could keep the maintainer from
+        // pairing for as long as it liked.
+        val fresh = auth.reissue(t0 + 2)
+        assertTrue(auth.pair(fresh, t0 + 3) is Auth.PairResult.Ok)
+    }
+
+    @Test
     fun anExpiredCodeIsRefused() {
         val auth = Auth()
         auth.start(t0)

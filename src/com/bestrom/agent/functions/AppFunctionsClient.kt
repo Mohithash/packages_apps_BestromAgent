@@ -61,7 +61,28 @@ class AppFunctionsClient(
     companion object {
         const val SOURCE_SEARCH = "searchAppFunctions"
         const val SOURCE_APPSEARCH = "appsearch"
-        private const val CALL_TIMEOUT_MS = 15000L
+
+        /**
+         * Per call budget inside functions.list. Two calls can run in one
+         * request - the search and the state lookup - so the worst case is
+         * twice this, and the host waits longer than that.
+         */
+        private const val LIST_TIMEOUT_MS = 10000L
+
+        /** The manager path was not available at all. */
+        const val FALLBACK_NO_MANAGER = "app_function_manager_unavailable"
+
+        /** The manager was there and searchAppFunctions failed or timed out. */
+        const val FALLBACK_SEARCH_FAILED = "search_app_functions_failed"
+
+        /**
+         * The caller's own claim that it was unlocked when the request began.
+         *
+         * Settings' device-state functions skip their keyguard check when a
+         * request carries it, which is a caller vouching for itself. The
+         * bridge has its own keyguard gate and does not pass this on.
+         */
+        private const val UNLOCK_CLAIM = "requestInitiatedWhileUnlocked"
     }
 
     class ExecuteOutcome(
@@ -85,27 +106,52 @@ class AppFunctionsClient(
             false
         }
 
-    /** Lists the functions this app may see, newest metadata first. */
+    /**
+     * Lists the functions this app may see.
+     *
+     * When the answer came from the AppSearch fallback because the manager
+     * path failed, the result says why in fallback_reason - otherwise "nothing
+     * is indexed" and "AppFunctions is broken" look identical.
+     */
     fun list(packageFilter: String?, includeSchema: Boolean): JSONObject {
         val manager = manager()
-        if (manager != null) {
+        val fallbackReason: String
+        if (manager == null) {
+            fallbackReason = FALLBACK_NO_MANAGER
+        } else {
             val fromSearch = searchViaManager(manager, packageFilter)
             if (fromSearch != null) {
                 val states = statesFor(manager, fromSearch)
-                return encode(SOURCE_SEARCH, fromSearch.map { encodeMetadata(it, states, includeSchema) })
+                return encode(
+                    SOURCE_SEARCH,
+                    fromSearch.map { encodeMetadata(it, states, includeSchema) },
+                    null,
+                )
             }
+            fallbackReason = FALLBACK_SEARCH_FAILED
         }
         val documents = searchViaAppSearch(packageFilter)
-        return encode(SOURCE_APPSEARCH, documents.map { encodeStaticDocument(it, includeSchema) })
+        return encode(
+            SOURCE_APPSEARCH,
+            documents.map { encodeStaticDocument(it, includeSchema) },
+            fallbackReason,
+        )
     }
 
-    private fun encode(source: String, functions: List<JSONObject>): JSONObject {
+    private fun encode(
+        source: String,
+        functions: List<JSONObject>,
+        fallbackReason: String?,
+    ): JSONObject {
         val array = JSONArray()
         for (f in functions) array.put(f)
-        return JSONObject()
-            .put("source", source)
-            .put("functions", array)
-            .put("count", functions.size)
+        val out =
+            JSONObject()
+                .put("source", source)
+                .put("functions", array)
+                .put("count", functions.size)
+        if (fallbackReason != null) out.put("fallback_reason", fallbackReason)
+        return out
     }
 
     private fun searchViaManager(
@@ -136,7 +182,7 @@ class AppFunctionsClient(
         } catch (e: Exception) {
             return null
         }
-        if (!latch.await(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)) return null
+        if (!latch.await(LIST_TIMEOUT_MS, TimeUnit.MILLISECONDS)) return null
         return holder.get()
     }
 
@@ -166,7 +212,7 @@ class AppFunctionsClient(
         } catch (e: Exception) {
             return emptyMap()
         }
-        if (!latch.await(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)) return emptyMap()
+        if (!latch.await(LIST_TIMEOUT_MS, TimeUnit.MILLISECONDS)) return emptyMap()
         val states = holder.get() ?: return emptyMap()
         val out = HashMap<String, Boolean>(states.size)
         for (s in states) out[s.functionName.qualifiedId] = s.isEnabled
@@ -195,17 +241,20 @@ class AppFunctionsClient(
                 .put("version", if (schema != null) schema.version else JSONObject.NULL),
         )
 
-        val flattened = documentToJson(document)
-        out.put("description", flattened.opt("description") ?: JSONObject.NULL)
+        // Metadata is flattened without the single-element collapse: a
+        // function with one parameter and a function with two must not come
+        // back shaped differently.
+        val flattened = documentToJson(document, collapseSingles = false)
+        out.put("description", firstValue(flattened, "description") ?: JSONObject.NULL)
         if (includeSchema) {
-            out.put("parameters", flattened.opt("parameters") ?: JSONObject())
-            out.put("response", flattened.opt("response") ?: JSONObject())
+            asArray(flattened.opt("parameters"))?.let { out.put("parameters", it) }
+            asArray(flattened.opt("response"))?.let { out.put("response", it) }
         }
         return out
     }
 
     private fun encodeStaticDocument(document: GenericDocument, includeSchema: Boolean): JSONObject {
-        val flattened = documentToJson(document)
+        val flattened = documentToJson(document, collapseSingles = false)
         val packageName = firstString(flattened, AppFunctionStaticMetadataHelper.PROPERTY_PACKAGE_NAME)
         val functionId = firstString(flattened, AppFunctionStaticMetadataHelper.PROPERTY_FUNCTION_ID)
         val out =
@@ -214,22 +263,44 @@ class AppFunctionsClient(
                 .put("function_id", functionId ?: document.id)
                 .put(
                     "enabled",
-                    flattened.opt(AppFunctionStaticMetadataHelper.STATIC_PROPERTY_ENABLED_BY_DEFAULT)
-                        ?: true,
+                    firstValue(
+                        flattened,
+                        AppFunctionStaticMetadataHelper.STATIC_PROPERTY_ENABLED_BY_DEFAULT,
+                    ) ?: true,
                 )
                 .put(
                     "schema",
                     JSONObject()
-                        .put("category", flattened.opt("schemaCategory") ?: JSONObject.NULL)
-                        .put("name", flattened.opt("schemaName") ?: JSONObject.NULL)
-                        .put("version", flattened.opt("schemaVersion") ?: JSONObject.NULL),
+                        .put("category", firstValue(flattened, "schemaCategory") ?: JSONObject.NULL)
+                        .put("name", firstValue(flattened, "schemaName") ?: JSONObject.NULL)
+                        .put("version", firstValue(flattened, "schemaVersion") ?: JSONObject.NULL),
                 )
-                .put("description", flattened.opt("description") ?: JSONObject.NULL)
+                .put("description", firstValue(flattened, "description") ?: JSONObject.NULL)
         if (includeSchema) {
-            out.put("parameters", flattened.opt("parameters") ?: JSONObject())
-            out.put("response", flattened.opt("response") ?: JSONObject())
+            asArray(flattened.opt("parameters"))?.let { out.put("parameters", it) }
+            asArray(flattened.opt("response"))?.let { out.put("response", it) }
         }
         return out
+    }
+
+    /**
+     * A repeated property as an array whatever its length, or null when the
+     * property is absent. parameters and response are always lists on the
+     * wire, so a one-parameter function cannot be mistaken for the schema
+     * object itself.
+     */
+    private fun asArray(value: Any?): JSONArray? {
+        if (value == null || value === JSONObject.NULL) return null
+        if (value is JSONArray) return if (value.length() == 0) null else value
+        return JSONArray().put(value)
+    }
+
+    /** The first value of a property that may have come back as an array. */
+    private fun firstValue(o: JSONObject, key: String): Any? {
+        val v = o.opt(key) ?: return null
+        if (v === JSONObject.NULL) return null
+        if (v is JSONArray) return if (v.length() > 0) v.opt(0) else null
+        return v
     }
 
     private fun firstString(o: JSONObject, key: String): String? {
@@ -253,7 +324,7 @@ class AppFunctionsClient(
         } catch (e: Exception) {
             return emptyList()
         }
-        if (!sessionLatch.await(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)) return emptyList()
+        if (!sessionLatch.await(LIST_TIMEOUT_MS, TimeUnit.MILLISECONDS)) return emptyList()
         val session = sessionHolder.get() ?: return emptyList()
 
         val out = ArrayList<GenericDocument>()
@@ -299,7 +370,7 @@ class AppFunctionsClient(
             if (result.isSuccess) holder.set(result.resultValue)
             latch.countDown()
         }
-        if (!latch.await(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)) return null
+        if (!latch.await(LIST_TIMEOUT_MS, TimeUnit.MILLISECONDS)) return null
         return holder.get()
     }
 
@@ -324,7 +395,7 @@ class AppFunctionsClient(
 
         val request =
             ExecuteAppFunctionRequest.Builder(packageName, functionId)
-                .setParameters(jsonToDocument(params))
+                .setParameters(jsonToDocument(withoutUnlockClaim(params)))
                 .build()
 
         val latch = CountDownLatch(1)
@@ -399,11 +470,43 @@ class AppFunctionsClient(
         )
     }
 
+    /**
+     * The parameter document with every [UNLOCK_CLAIM] property removed, at
+     * any depth. A provider that trusts the claim is trusting the caller, and
+     * the bridge will not make that claim on a caller's behalf.
+     */
+    private fun withoutUnlockClaim(params: JSONObject): JSONObject {
+        val out = JSONObject()
+        val keys = params.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (key == UNLOCK_CLAIM) continue
+            when (val value = params.get(key)) {
+                is JSONObject -> out.put(key, withoutUnlockClaim(value))
+                is JSONArray -> out.put(key, withoutUnlockClaim(value))
+                else -> out.put(key, value)
+            }
+        }
+        return out
+    }
+
+    private fun withoutUnlockClaim(array: JSONArray): JSONArray {
+        val out = JSONArray()
+        for (i in 0 until array.length()) {
+            when (val value = array.get(i)) {
+                is JSONObject -> out.put(withoutUnlockClaim(value))
+                is JSONArray -> out.put(withoutUnlockClaim(value))
+                else -> out.put(value)
+            }
+        }
+        return out
+    }
+
     private fun returnValueToJson(document: GenericDocument): JSONObject {
         val value = document.getProperty(ExecuteAppFunctionResponse.PROPERTY_RETURN_VALUE)
         val out = JSONObject()
         if (value == null) return documentToJson(document)
-        val encoded = propertyToJson(value)
+        val encoded = propertyToJson(value, true)
         if (encoded is JSONObject) return encoded
         out.put("value", encoded)
         return out
@@ -440,44 +543,50 @@ class AppFunctionsClient(
         return out
     }
 
-    /** Flattens a GenericDocument into plain JSON. */
-    fun documentToJson(document: GenericDocument): JSONObject {
+    /**
+     * Flattens a GenericDocument into plain JSON.
+     *
+     * [collapseSingles] unwraps a one-element repeated property, which reads
+     * better for a function result. It is off for metadata, where the shape
+     * has to be the same whether a function takes one parameter or five.
+     */
+    fun documentToJson(document: GenericDocument, collapseSingles: Boolean = true): JSONObject {
         val out = JSONObject()
         for (name in document.propertyNames) {
             val value = document.getProperty(name) ?: continue
-            out.put(name, propertyToJson(value))
+            out.put(name, propertyToJson(value, collapseSingles))
         }
         return out
     }
 
-    private fun propertyToJson(value: Any): Any {
+    private fun propertyToJson(value: Any, collapseSingles: Boolean): Any {
         when (value) {
             is Array<*> -> {
-                if (value.size == 1) {
+                if (collapseSingles && value.size == 1) {
                     val only = value[0]
-                    return if (only is GenericDocument) documentToJson(only)
+                    return if (only is GenericDocument) documentToJson(only, collapseSingles)
                     else only ?: JSONObject.NULL
                 }
                 val array = JSONArray()
                 for (v in value) {
-                    array.put(if (v is GenericDocument) documentToJson(v) else v)
+                    array.put(if (v is GenericDocument) documentToJson(v, collapseSingles) else v)
                 }
                 return array
             }
             is LongArray -> {
-                if (value.size == 1) return value[0]
+                if (collapseSingles && value.size == 1) return value[0]
                 val array = JSONArray()
                 for (v in value) array.put(v)
                 return array
             }
             is DoubleArray -> {
-                if (value.size == 1) return value[0]
+                if (collapseSingles && value.size == 1) return value[0]
                 val array = JSONArray()
                 for (v in value) array.put(v)
                 return array
             }
             is BooleanArray -> {
-                if (value.size == 1) return value[0]
+                if (collapseSingles && value.size == 1) return value[0]
                 val array = JSONArray()
                 for (v in value) array.put(v)
                 return array

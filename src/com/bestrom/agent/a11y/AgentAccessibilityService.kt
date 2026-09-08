@@ -123,9 +123,9 @@ class AgentAccessibilityService : AccessibilityService() {
     }
 
     /** Walks the active window and remembers the result under a fresh tree_id. */
-    fun snapshot(maxDepth: Int, maxNodes: Int, includeInvisible: Boolean): TreeSerializer.Snapshot? {
+    fun snapshot(maxDepth: Int, maxNodes: Int): TreeSerializer.Snapshot? {
         val root = activeRoot() ?: return null
-        val collected = TreeSerializer.collect(root, maxDepth, maxNodes, includeInvisible)
+        val collected = TreeSerializer.collect(root, maxDepth, maxNodes)
         val id = TreeSerializer.newTreeId()
 
         val window = root.window

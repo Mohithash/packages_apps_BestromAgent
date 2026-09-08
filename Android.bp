@@ -63,7 +63,9 @@ java_library_host {
     srcs: [
         "src/com/bestrom/agent/bridge/Framing.kt",
         "src/com/bestrom/agent/bridge/Auth.kt",
+        "src/com/bestrom/agent/bridge/Peer.kt",
         "src/com/bestrom/agent/bridge/RateLimiter.kt",
+        "src/com/bestrom/agent/audit/AuditBounds.kt",
     ],
 }
 

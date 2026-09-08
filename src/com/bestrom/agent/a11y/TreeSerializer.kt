@@ -82,13 +82,12 @@ object TreeSerializer {
 
     /**
      * Walks [root] depth first, collecting at most [maxNodes] nodes no deeper
-     * than [maxDepth].
+     * than [maxDepth]. Nodes the user cannot see are never collected.
      */
     fun collect(
         root: AccessibilityNodeInfo,
         maxDepth: Int,
         maxNodes: Int,
-        includeInvisible: Boolean,
     ): Collected {
         val facts = ArrayList<NodeFacts>()
         val nodes = ArrayList<AccessibilityNodeInfo>()
@@ -106,7 +105,7 @@ object TreeSerializer {
             val count = node.childCount
             for (i in 0 until count) {
                 val child = node.getChild(i) ?: continue
-                if (!includeInvisible && !child.isVisibleToUser) continue
+                if (!child.isVisibleToUser) continue
                 val childIndex = visit(child, depth + 1)
                 if (childIndex < 0) break
                 facts[index].children.add(childIndex)
