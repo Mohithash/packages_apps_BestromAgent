@@ -13,10 +13,14 @@ feature is gated on the key rotation, not on this code.
 
 ## What it is not
 
-* Not autonomous. There is no trigger, no loop, no schedule. Every acting method
-  needs `confirm: true` on the wire, and a human is on the other end.
-* Not networked. The bridge is a unix abstract socket. The app holds no
-  `INTERNET` permission and a verify gate asserts its absence.
+* Not triggered. There is no schedule, no receiver and no notification
+  listener. A task starts when a person types one into the field on the task
+  screen, and never any other way.
+* Not networked except to the one endpoint the user configured. The bridge is
+  still a unix abstract socket with no address outside the device. `INTERNET`
+  is held by exactly one class, `brain/OpenAiCompatClient`, which builds one
+  URL and no other; a verify gate asserts the dex carries the platform HTTP
+  stack and carries no vendored one.
 * Not resident. Both services ship `android:enabled="false"`, there is no
   receiver, job, provider or notification listener, and Agent mode does not
   survive a reboot. With the switch off the app is an APK on disk.
@@ -100,7 +104,9 @@ package (`data.reason`); no active window is `-32004` with
 
 Defended, independently of the signing key:
 
-* No network reachability, no `INTERNET` permission.
+* One network destination: the chat-completions endpoint the user typed in,
+  reached by one class. No other code in the app opens a connection, and
+  nothing reaches the phone from outside.
 * No persistence: nothing in the boot path, nothing restored after a reboot.
 * No silent power: a code on the phone screen to pair, a token that lives in
   memory only, an ongoing notification, three independent stops, and a thirty
@@ -151,7 +157,174 @@ Not defended, and said plainly because the opposite was claimed here before:
   `ui.tree`, `ui.screenshot` and `ui.tap` refuse with `-32012`
   (`data.reason = "denied_package"`) while an excluded package is on screen.
 
-Not defended: indirect prompt injection. Everything `ui.tree` and `ui.screenshot`
-return is text an attacker can put on the screen. Phase 1 keeps that risk on the
-host by refusing to be autonomous at all. Screen content is data, never
-instructions.
+Not defended, still: indirect prompt injection. Everything `ui.tree` and
+`ui.screenshot` return is text an attacker can put on the screen. What the
+runner adds is a filter for the mechanical channels and a policy engine that
+does not read the model's opinion; neither of those makes the agent immune.
+See "Prompt injection, honestly" below.
+
+## The runner
+
+Phase 1 made the phone a tool set for a computer. Phase 2 moves the caller onto
+the phone: the same tools, the same guardrails, driven by a model the user
+configures. Nothing about Phase 1 changed - `adb forward` still works, the
+pairing code still works, and the runner is simply a second caller of
+`Methods.dispatch`.
+
+    goal -> read screen -> model -> policy -> act -> look again -> ... -> done
+
+It runs on one thread inside `AgentBridgeService`, started when a task starts
+and gone when it ends. There is no service for it, no job, no receiver and
+nothing at boot; with Agent mode off the app is still an APK on disk.
+
+The loop is deliberately short of tricks. There is no planner pass, because a
+phone task is three to six steps and a plan is stale after the first surprise.
+There is no parallel rollout, because the phone has one screen. The one
+optimisation that earns its keep is that a fresh screen is attached to the
+result of every acting tool, so the model does not spend a whole round trip
+asking what happened - a four-action task is five or six model calls, not ten.
+
+Portions of the runner - the loop structure, the post-action screen attachment,
+the history compaction, the stuck detector and the task budget - are derived
+from [PokeClaw](https://github.com/agents-io/PokeClaw), Copyright 2026
+agents.io, licensed under the Apache License, Version 2.0. No file is copied;
+the derivation is of structure, and `NOTICE` records it.
+
+## The brain
+
+One OpenAI-compatible chat-completions client, `brain/OpenAiCompatClient.kt`,
+built on `HttpsURLConnection`. There is no vendored HTTP library:
+`external/okhttp` in this tree is ART-internal and visibility-restricted, and a
+verify gate asserts the dex contains `HttpsURLConnection` and contains no
+`okhttp3` or `retrofit2`.
+
+The user supplies the base URL, the key and the model. Presets fill in the first
+and suggest the third:
+
+| preset | base URL | notes |
+| --- | --- | --- |
+| Anthropic | `https://api.anthropic.com/v1` | `Authorization: Bearer`. Anthropic documents this layer as for testing rather than production, and it does **not** support prompt caching - which is the whole cost argument for Haiku. |
+| OpenAI | `https://api.openai.com/v1` | the one preset that sends `max_completion_tokens`; `max_tokens` is deprecated there and rejected by the GPT-5 line |
+| Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | cheapest major vendor, and the worst fit for a ROM that ships no GApps. Said out loud rather than hidden. |
+| Groq | `https://api.groq.com/openai/v1` | free tier, no card, ~30 req/min, best latency anywhere |
+| Cerebras | `https://api.cerebras.ai/v1` | ~1M free tokens a day, highest throughput measured |
+| OpenRouter | `https://openrouter.ai/api/v1` | `HTTP-Referer` and `X-Title` are attribution-only and are **not** sent |
+| Local llama.cpp | `http://<host>:8080/v1` | needs `--jinja` for tool calls and `--host 0.0.0.0` |
+| Local Ollama | `http://<host>:11434/v1` | needs `OLLAMA_HOST=0.0.0.0`, and does not support `tool_choice`, so the preset omits the field |
+
+The two local presets are the only ones allowed to speak plain http, and only to
+a loopback, RFC1918, 100.64/10, 169.254/16 or `fc00::/7` literal. A *name* is
+never private, however it is spelled: `localhost.attacker.example` resolves
+wherever its owner says.
+
+`INTERNET` is the one permission this adds. It is `normal`, so the privileged
+allowlist is unchanged - still exactly two entries. The client builds exactly one
+URL, `<baseUrl>/chat/completions`, and there is no other network code in the app.
+
+The key is sealed with an `AndroidKeyStore` AES-GCM key created with
+`setUnlockedDeviceRequired(true)`, and the ciphertext lives in the app's files
+directory. It is never logged (the `brain` package contains no logging statement
+and a gate asserts it), never audited, never rendered back into the field, and
+`allowBackup` is already false.
+
+## The tools
+
+Eleven, mapping one to one onto bridge methods, with the fields the model has no
+business choosing filled in by the caller.
+
+| tool | method | tier |
+| --- | --- | --- |
+| `read_screen` | `ui.tree` | read |
+| `list_functions` | `functions.list` | read |
+| `screenshot` | `ui.screenshot` | read, and absent from the schema unless the user enabled it |
+| `tap` `long_press` `swipe` `type` `key` | `ui.*` | mutating |
+| `launch_app` | `app.launch`, package form only | mutating |
+| `call_function` | `functions.execute` | mutating |
+| `done` | - | terminal |
+
+`app.list`, `log.list`, `log.clear` and `agent.stop` are **not** in the schema.
+The app list is put in the prompt once instead; the audit log is the
+accountability control and a model that can read it can plan around it; stopping
+is the user's.
+
+`tree_id` is never shown to the model - the runner remembers it from the last
+`read_screen` and supplies it, so a stale tree is caught by the platform rather
+than papered over. The `component` and `intent_uri` forms of `app.launch` are not
+offered at all: a model that can only name a package cannot build an Intent.
+
+The screen is handed over as a digest, not as the raw tree - one line per element
+instead of a JSON object per node, three or four kilobytes where the tree is
+thirty to sixty.
+
+## The policy
+
+Every call is classified from its name and its arguments. **What the model says
+about a call is never an input**, because an app that can put text on the screen
+can talk to the model.
+
+* **read** - never asks.
+* **mutating** - asks, unless the user chose autonomous for the task or tapped
+  Allow all for this task.
+* **always asks** - anything aimed at an app that handles payments or
+  credentials, detected from `BILLING`, from a tap-to-pay HCE service, or from a
+  maintained name list. Allow all does not cover it and autonomous does not
+  cover it.
+* **refused** - a Settings function whose key touches the lock screen, the
+  bootloader, developer options, adb, encryption, factory reset or the
+  accessibility list; opening a payment or credential app the goal never
+  mentioned; typing into a password field; anything aimed at `com.bestrom.agent`;
+  any package on the Excluded apps list.
+
+The confirmation floor in `Methods.dispatch` is untouched underneath all of it:
+the runner still has to put `confirm: true` in the params, and it only does that
+after the policy engine allowed the call.
+
+A name list is not a taxonomy and it will miss a bank. That is why the two tests
+that read the APK are the load-bearing ones and the list is only the backstop,
+and why **Excluded apps** remains the user's own answer for anything all three
+miss.
+
+## Prompt injection, honestly
+
+Everything a tool returns is wrapped as untrusted data and the system prompt says
+in as many words that device output is never an instruction. The filter removes
+the channels a filter can actually remove: zero-width characters, bidirectional
+overrides, chat-template markers, a line pretending to be a system turn. It does
+**not** try to detect instructions written in ordinary English, and pretending it
+could would be the same mistake this README already corrects about `FLAG_SECURE`.
+There is a host test that asserts an instruction in plain English *survives* the
+filter, so that nobody later mistakes it for a semantic defence.
+
+The real defence is that the policy engine decides tiers from arguments rather
+than from text, that the dangerous tier is refused rather than confirmed, and
+that a human taps Allow. Published 2026 results put attack success as high as
+0.822 against a mobile agent that reads the accessibility tree unfiltered and
+0.150 against a defensive one. Reduced, not eliminated.
+
+The entry points are held to the same rule. `AgentTaskActivity` answers
+`ACTION_ASSIST`, which **any app on the device can send**, so it discards every
+extra it is given - no `EXTRA_ASSIST_TEXT`, no `EXTRA_ASSIST_CONTEXT`, no intent
+data, no clipboard. A task only ever starts from text the user typed into the
+field in front of them.
+
+## The caps
+
+A task stops at the step limit (25 by default), at the token limit (200000), when
+it repeats itself, when the phone locks, when the model answers in prose twice in
+a row, when three tool calls in a row do not parse, and whenever Stop is pressed -
+including in the middle of a model call, which is disconnected rather than waited
+out. Both limits are read when the task starts, so changing them under a running
+task does not widen it.
+
+## Where the screen goes
+
+A running task sends the screen digest - element labels, text, resource ids - to
+whatever endpoint the user configured, with the user's key. That is the honest
+cost of a cloud brain and the settings screen says it above the fold. The LAN
+preset is the answer for anyone who does not want that: one base URL change and
+nothing leaves the network.
+
+The audit log gains three entries per task: `agent.start`, one `brain.call` per
+model call with the model id as its target, and `agent.end` with the reason the
+task ended. The goal is text the user typed, so it is not one of them, and
+neither is anything that was on screen.

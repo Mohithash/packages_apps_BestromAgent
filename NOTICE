@@ -1,0 +1,32 @@
+BestromAgent
+Copyright (C) 2026 The BestROM Project
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+-------------------------------------------------------------------------------
+
+Portions of the task runner - the loop structure, the post-action screen
+attachment, the history compaction, the stuck detector and the task budget -
+are derived from PokeClaw (https://github.com/agents-io/PokeClaw),
+Copyright 2026 agents.io, licensed under the Apache License, Version 2.0.
+No file is copied; the derivation is of structure.
+
+The screen digest follows the idea of minitap mobile-use's Contextor
+(https://github.com/minitap-ai/mobile-use), licensed under the Apache License,
+Version 2.0 - a screen-state summariser whose purpose is to cut the token bill.
+No code is taken.
+
+The tool names follow the shape of mobile-mcp
+(https://github.com/mobile-next/mobile-mcp), licensed under the Apache License,
+Version 2.0, so that a client written against it reads familiarly here. No code
+is taken.
