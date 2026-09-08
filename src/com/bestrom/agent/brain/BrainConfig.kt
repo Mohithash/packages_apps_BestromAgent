@@ -143,7 +143,6 @@ data class BrainConfig(
     val model: String = "",
     /** Anthropic only, and only when the key can see more than one workspace. */
     val workspaceId: String = "",
-    val vision: Boolean = false,
     val screenshots: Boolean = false,
     val autonomous: Boolean = false,
     val stepCap: Int = DEFAULT_STEP_CAP,
@@ -164,8 +163,14 @@ data class BrainConfig(
 
     fun host(): String = BrainUrl.hostOf(baseUrl) ?: ""
 
-    /** Screenshots reach the model only when the model can see and the user agreed. */
-    fun sendScreenshots(): Boolean = vision && screenshots
+    /**
+     * Screenshots reach the model only when the user turned them on.
+     *
+     * There was a second flag for "the model can see", set from the same
+     * switch in both directions, so it could only ever repeat this one. The
+     * switch says what it costs and what the model has to be.
+     */
+    fun sendScreenshots(): Boolean = screenshots
 
     fun configured(): Boolean =
         baseUrl.isNotEmpty() && model.isNotEmpty() && BrainUrl.reject(baseUrl) == null

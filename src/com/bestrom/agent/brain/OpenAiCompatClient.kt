@@ -17,9 +17,9 @@
 
 package com.bestrom.agent.brain
 
+import com.bestrom.agent.runner.InjectionFilter
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import com.bestrom.agent.runner.InjectionFilter
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
@@ -43,7 +43,13 @@ import org.json.JSONArray
 class OpenAiCompatClient(
     private val config: BrainConfig,
     private val keySupplier: () -> ApiKey,
-    private val sleeper: (Long) -> Unit = { if (it > 0) Thread.sleep(it) },
+    /**
+     * Asked before every attempt as well as the client's own flag, so a Stop
+     * that lands between the constructor and the caller's assignment - the one
+     * moment cancel() has nothing to cancel - is still honoured.
+     */
+    private val stopped: () -> Boolean = { false },
+    private val sleeper: (Long) -> Unit = { defaultSleep(it) },
     private val jitter: (Long) -> Long = { defaultJitter(it) },
 ) {
 
@@ -91,6 +97,17 @@ class OpenAiCompatClient(
 
         private val random = Random()
 
+        /** A backoff that ends when the thread is interrupted. */
+        @JvmStatic
+        fun defaultSleep(ms: Long) {
+            if (ms <= 0) return
+            try {
+                Thread.sleep(ms)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+        }
+
         /** The backoff carries +/-20% so a fleet does not retry in lockstep. */
         @JvmStatic
         fun defaultJitter(ms: Long): Long {
@@ -131,6 +148,10 @@ class OpenAiCompatClient(
     @Volatile private var live: HttpURLConnection? = null
 
     @Volatile private var cancelled = false
+
+    /** Cancelled, told to stop from outside, or interrupted mid-backoff. */
+    private fun stopping(): Boolean =
+        cancelled || stopped() || Thread.currentThread().isInterrupted
 
     /**
      * Drops the connection under the read.
@@ -173,12 +194,16 @@ class OpenAiCompatClient(
         var backoff = 1000L
 
         while (true) {
-            if (cancelled) return Outcome.Fail(BrainError.Cancelled, elapsed(started))
+            if (stopping()) return Outcome.Fail(BrainError.Cancelled, elapsed(started))
             val attempt = send(bytes, authorization)
 
             when (attempt) {
                 is Attempt.Body -> {
                     if (attempt.status == HttpURLConnection.HTTP_OK) {
+                        // A 200 that arrived after Stop is not an answer.
+                        if (stopping()) {
+                            return Outcome.Fail(BrainError.Cancelled, elapsed(started))
+                        }
                         when (val parsed = ChatResponse.parse(attempt.text)) {
                             is ChatResponse.Parsed.Ok ->
                                 return Outcome.Ok(
@@ -281,6 +306,10 @@ class OpenAiCompatClient(
                 return Attempt.Unreachable("the https endpoint did not open a TLS connection")
             }
             live = opened
+            // The window between openConnection and this line is the one
+            // cancel() cannot reach, so it is checked here, before the body
+            // goes out.
+            if (stopping()) return Attempt.Cancelled
             opened.requestMethod = "POST"
             opened.connectTimeout = CONNECT_TIMEOUT_MS
             opened.readTimeout = READ_TIMEOUT_MS
@@ -297,6 +326,7 @@ class OpenAiCompatClient(
                 opened.setRequestProperty("anthropic-workspace-id", config.workspaceId)
             }
 
+            if (stopping()) return Attempt.Cancelled
             opened.outputStream.use { it.write(bytes) }
             wrote = true
 
@@ -306,10 +336,10 @@ class OpenAiCompatClient(
             val text = stream?.use { read(it) } ?: ""
             return Attempt.Body(status, text, opened.getHeaderField("Retry-After"))
         } catch (e: SocketTimeoutException) {
-            if (cancelled) return Attempt.Cancelled
+            if (stopping()) return Attempt.Cancelled
             return if (wrote) Attempt.ReadTimeout else Attempt.Unreachable("connect timed out")
         } catch (e: Exception) {
-            if (cancelled) return Attempt.Cancelled
+            if (stopping()) return Attempt.Cancelled
             return Attempt.Unreachable(e.javaClass.simpleName)
         } finally {
             live = null

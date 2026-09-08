@@ -30,6 +30,11 @@ import org.json.JSONObject
  *
  * Names, parameter names and the mapping to a method all live in this table, so
  * a rename cannot drift between what the model is told and what is dispatched.
+ *
+ * The descriptions are short on purpose. This block is re-sent on every step of
+ * every task and nothing here caches it, so the working rules - prefer an
+ * element id, prefer call_function, do not repeat an action that changed
+ * nothing - are stated once in the system prompt instead of eleven times here.
  */
 object ToolSchema {
 
@@ -94,15 +99,13 @@ object ToolSchema {
                 READ_SCREEN,
                 "ui.tree",
                 false,
-                "Read what is currently on screen. Returns one line per element with an id " +
-                    "you pass to tap, long_press or type. Call this before acting when you do " +
-                    "not already know what is on screen.",
+                "Read the screen: one line per element, with an id.",
                 listOf(
                     Param(
                         "max_nodes",
                         "integer",
                         false,
-                        "How many elements to read at most. 120 by default.",
+                        "120 by default.",
                         minimum = 20,
                         maximum = 400,
                     )
@@ -112,11 +115,11 @@ object ToolSchema {
                 TAP,
                 "ui.tap",
                 true,
-                "Tap an element by its id from read_screen, or a point on screen. Prefer the id.",
+                "Tap an element by id, or a point.",
                 listOf(
-                    Param("node_id", "integer", false, "The element id from read_screen."),
-                    Param("x", "integer", false, "Screen x, when no element matches."),
-                    Param("y", "integer", false, "Screen y, when no element matches."),
+                    Param("node_id", "integer", false, "An id from read_screen."),
+                    Param("x", "integer", false, ""),
+                    Param("y", "integer", false, ""),
                 ),
             ),
             Tool(
@@ -125,14 +128,14 @@ object ToolSchema {
                 true,
                 "Press and hold an element or a point.",
                 listOf(
-                    Param("node_id", "integer", false, "The element id from read_screen."),
-                    Param("x", "integer", false, "Screen x, when no element matches."),
-                    Param("y", "integer", false, "Screen y, when no element matches."),
+                    Param("node_id", "integer", false, "An id from read_screen."),
+                    Param("x", "integer", false, ""),
+                    Param("y", "integer", false, ""),
                     Param(
                         "duration_ms",
                         "integer",
                         false,
-                        "How long to hold. 600 by default.",
+                        "600 by default.",
                         minimum = 1,
                         maximum = 3000,
                     ),
@@ -142,16 +145,15 @@ object ToolSchema {
                 SWIPE,
                 "ui.swipe",
                 true,
-                "Swipe from one point to another. To scroll a list down, swipe from a point " +
-                    "low on screen to a point high on it.",
+                "Swipe between two points.",
                 listOf(
-                    Param("from", "array", true, "The point to start at, [x, y].", itemType = "integer"),
-                    Param("to", "array", true, "The point to end at, [x, y].", itemType = "integer"),
+                    Param("from", "array", true, "", itemType = "integer"),
+                    Param("to", "array", true, "", itemType = "integer"),
                     Param(
                         "duration_ms",
                         "integer",
                         false,
-                        "How long the swipe takes. 300 by default.",
+                        "300 by default.",
                         minimum = 1,
                         maximum = 3000,
                     ),
@@ -161,21 +163,11 @@ object ToolSchema {
                 TYPE,
                 "ui.type",
                 true,
-                "Type text into a text field. Password fields are refused.",
+                "Type into a text field.",
                 listOf(
-                    Param("text", "string", true, "The text to type."),
-                    Param(
-                        "node_id",
-                        "integer",
-                        false,
-                        "The field to type into. The focused field when left out.",
-                    ),
-                    Param(
-                        "replace",
-                        "boolean",
-                        false,
-                        "Replace what is in the field. True by default.",
-                    ),
+                    Param("text", "string", true, ""),
+                    Param("node_id", "integer", false, "The focused field when left out."),
+                    Param("replace", "boolean", false, "True by default."),
                 ),
             ),
             Tool(
@@ -183,42 +175,38 @@ object ToolSchema {
                 "ui.key",
                 true,
                 "Press a system key.",
-                listOf(Param("name", "string", true, "Which key.", enumValues = KEY_NAMES)),
+                listOf(Param("name", "string", true, "", enumValues = KEY_NAMES)),
             ),
             Tool(
                 LAUNCH_APP,
                 "app.launch",
                 true,
-                "Open an app by package name. The installed apps are listed in your instructions.",
-                listOf(Param("package", "string", true, "The package name to open.")),
+                "Open an app by package name.",
+                listOf(Param("package", "string", true, "")),
             ),
             Tool(
                 LIST_FUNCTIONS,
                 "functions.list",
                 false,
-                "List the app functions this device publishes. The catalogue is already in " +
-                    "your instructions; call this again only if you need one app's functions " +
-                    "in more detail.",
-                listOf(Param("package", "string", false, "Only this app's functions.")),
+                "List app functions in detail.",
+                listOf(Param("package", "string", false, "Only this app's.")),
             ),
             Tool(
                 CALL_FUNCTION,
                 "functions.execute",
                 true,
-                "Call an app function. This is the direct way to change a device setting; " +
-                    "prefer it over navigating Settings by hand.",
+                "Call an app function.",
                 listOf(
-                    Param("package", "string", true, "The app that publishes the function."),
-                    Param("function", "string", true, "The function id from the catalogue."),
-                    Param("params", "object", false, "The function's own parameters."),
+                    Param("package", "string", true, ""),
+                    Param("function", "string", true, "The id from the catalogue."),
+                    Param("params", "object", false, ""),
                 ),
             ),
             Tool(
                 SCREENSHOT,
                 "ui.screenshot",
                 false,
-                "Take a screenshot. Use it only when read_screen does not describe what you " +
-                    "need, for example an image or a chart.",
+                "Take a screenshot.",
                 emptyList(),
                 vision = true,
             ),
@@ -226,8 +214,7 @@ object ToolSchema {
                 DONE,
                 "",
                 false,
-                "Finish the task. answer must contain the actual result the user asked for, " +
-                    "not a description of what you did. If the task cannot be done, say why here.",
+                "Finish. answer carries the result itself.",
                 listOf(Param("answer", "string", true, "What the user reads.")),
             ),
         )
@@ -259,7 +246,10 @@ object ToolSchema {
         val properties = JSONObject()
         val required = JSONArray()
         for (p in tool.params) {
-            val schema = JSONObject().put("type", p.type).put("description", p.description)
+            val schema = JSONObject().put("type", p.type)
+            // A description that says no more than the name and the type does
+            // is left out: this block is re-sent on every step of every task.
+            if (p.description.isNotEmpty()) schema.put("description", p.description)
             if (p.enumValues != null) {
                 val values = JSONArray()
                 for (v in p.enumValues) values.put(v)

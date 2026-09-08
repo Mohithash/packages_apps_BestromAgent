@@ -103,6 +103,10 @@ class AgentRunner(
     @Volatile
     private var client: OpenAiCompatClient? = null
 
+    /** The thread this runner is on, so Stop can interrupt a sleep. */
+    @Volatile
+    private var thread: Thread? = null
+
     /** Filled in with the app list, because both come off the same scan. */
     private var settingsPackages: Set<String> = setOf(PolicyEngine.SETTINGS)
 
@@ -117,15 +121,19 @@ class AgentRunner(
         // A sheet nobody will now answer must not hold the thread for two
         // minutes before it notices the task is over.
         AgentState.confirm?.answer(PendingConfirm.Answer.DENY)
+        // And a settle wait or a model backoff must not either.
+        thread?.interrupt()
     }
 
     override fun run() {
+        thread = Thread.currentThread()
         try {
             if (!prepare()) return
             loop()
         } catch (e: Exception) {
             terminate(Task.BRAIN_ERROR, "the task ended unexpectedly: " + e.javaClass.simpleName)
         } finally {
+            thread = null
             finished()
         }
     }
@@ -343,7 +351,9 @@ class AgentRunner(
 
     /** One model call, with the errors it can end a task on. */
     private fun think(): ChatResponse? {
-        val brain = OpenAiCompatClient(config, { ApiKeyStore.lookup(context) })
+        // The stop predicate closes the window between the constructor and
+        // this assignment, where cancel() has nothing to cancel yet.
+        val brain = OpenAiCompatClient(config, { ApiKeyStore.lookup(context) }, { task.stopped() })
         client = brain
         val started = System.currentTimeMillis()
         val outcome =

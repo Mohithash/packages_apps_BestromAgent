@@ -102,7 +102,7 @@
     <string name="brain_workspace">Workspace id</string>
     <string name="brain_model">Model</string>
     <string name="brain_model_suggestions">Suggested: %1$s</string>
-    <string name="brain_screenshots">Send screenshots to the model</string>
+    <string name="brain_screenshots">Send screenshots (the model must accept images)</string>
     <string name="brain_screenshots_on">On</string>
     <string name="brain_screenshots_off">Off. Reading the screen as text costs far less.</string>
     <string name="brain_screenshots_warning">A screenshot costs more than an entire ten step task. Only turn this on for a model that can see images.</string>

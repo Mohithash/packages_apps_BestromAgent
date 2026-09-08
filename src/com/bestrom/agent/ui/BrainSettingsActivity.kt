@@ -106,6 +106,7 @@ class BrainSettingsActivity : Activity() {
 
     override fun onDestroy() {
         worker.shutdownNow()
+        main.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
 
@@ -217,7 +218,7 @@ class BrainSettingsActivity : Activity() {
 
     private fun toggleScreenshots() {
         if (config.screenshots) {
-            config = config.copy(screenshots = false, vision = false)
+            config = config.copy(screenshots = false)
             save()
             return
         }
@@ -226,7 +227,7 @@ class BrainSettingsActivity : Activity() {
             .setMessage(R.string.brain_screenshots_warning)
             .setNegativeButton(R.string.brain_cancel, null)
             .setPositiveButton(R.string.brain_turn_on) { _, _ ->
-                config = config.copy(screenshots = true, vision = true)
+                config = config.copy(screenshots = true)
                 save()
             }
             .show()
@@ -317,7 +318,8 @@ class BrainSettingsActivity : Activity() {
                         )
                     is OpenAiCompatClient.Outcome.Fail -> outcome.error.sentence
                 }
-            main.post { testResult.text = text }
+            // Sixty seconds is long enough for this screen to be gone.
+            main.post { if (!isDestroyed && !isFinishing) testResult.text = text }
         }
     }
 

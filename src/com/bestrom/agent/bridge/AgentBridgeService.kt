@@ -225,7 +225,12 @@ class AgentBridgeService : Service(), Methods.Host {
             return getString(R.string.task_agent_off)
         }
         if (AgentState.a11y == null) return getString(R.string.task_no_accessibility)
-        if (AgentState.task != null) return getString(R.string.task_already_running)
+        // The thread as well as the state: a task that has been cancelled but
+        // is still winding down would otherwise let a second one start beside
+        // it, both writing the same step list and the same confirm slot.
+        if (AgentState.task != null || taskThread?.isAlive == true) {
+            return getString(R.string.task_already_running)
+        }
 
         val config = BrainPrefs.read(this)
         if (!config.configured()) return getString(R.string.task_no_brain)
@@ -617,10 +622,11 @@ class AgentBridgeService : Service(), Methods.Host {
         }
         AgentState.bridgeLive.set(false)
         // The task goes with the bridge: the runner checks the flag before
-        // every call, and cancel drops a model call that is in flight.
+        // every call, and cancel drops a model call that is in flight. The
+        // task itself is cleared by onTaskFinished, on the runner's own
+        // thread - clearing it here let a second task start while the first
+        // was still inside a backoff.
         runner?.cancel()
-        AgentState.task = null
-        AgentState.confirm = null
         AgentState.bridge = null
         AgentState.clearSteps()
         AgentState.paired.set(false)

@@ -81,6 +81,7 @@ class OpenAiCompatClientTest {
         key: ApiKey = ApiKey.Present("sk-test-000"),
         url: String = baseUrl(),
         preset: BrainPreset = BrainPreset.GROQ,
+        stopped: () -> Boolean = { false },
     ): OpenAiCompatClient =
         OpenAiCompatClient(
             BrainConfig(
@@ -89,6 +90,7 @@ class OpenAiCompatClientTest {
                 model = "a-model",
             ),
             { key },
+            stopped,
             // The waits are recorded rather than taken: a test that really
             // slept the backoff would take seven seconds to prove arithmetic.
             { slept.add(it) },

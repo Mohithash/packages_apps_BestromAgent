@@ -94,15 +94,10 @@ object AgentState {
 
     private val steps = ArrayList<StepEvent>(64)
 
-    /** Called on the runner's thread whenever a step line is added. */
-    @Volatile
-    var stepListener: (() -> Unit)? = null
-
     @Synchronized
     fun addStep(event: StepEvent) {
         steps.add(event)
         while (steps.size > MAX_STEPS) steps.removeAt(0)
-        stepListener?.invoke()
     }
 
     @Synchronized

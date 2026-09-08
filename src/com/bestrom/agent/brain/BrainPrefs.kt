@@ -34,7 +34,6 @@ object BrainPrefs {
     private const val KEY_BASE_URL = "brain_base_url"
     private const val KEY_MODEL = "brain_model"
     private const val KEY_WORKSPACE = "brain_workspace"
-    private const val KEY_VISION = "brain_vision"
     private const val KEY_SCREENSHOTS = "brain_screenshots"
     private const val KEY_AUTONOMOUS = "brain_autonomous"
     private const val KEY_STEP_CAP = "brain_step_cap"
@@ -51,7 +50,6 @@ object BrainPrefs {
             baseUrl = p.getString(KEY_BASE_URL, preset.defaultBaseUrl) ?: preset.defaultBaseUrl,
             model = p.getString(KEY_MODEL, "") ?: "",
             workspaceId = p.getString(KEY_WORKSPACE, "") ?: "",
-            vision = p.getBoolean(KEY_VISION, false),
             screenshots = p.getBoolean(KEY_SCREENSHOTS, false),
             autonomous = p.getBoolean(KEY_AUTONOMOUS, false),
             stepCap =
@@ -70,7 +68,6 @@ object BrainPrefs {
             .putString(KEY_BASE_URL, config.baseUrl)
             .putString(KEY_MODEL, config.model)
             .putString(KEY_WORKSPACE, config.workspaceId)
-            .putBoolean(KEY_VISION, config.vision)
             .putBoolean(KEY_SCREENSHOTS, config.screenshots)
             .putBoolean(KEY_AUTONOMOUS, config.autonomous)
             .putInt(KEY_STEP_CAP, config.stepCap)

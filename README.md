@@ -280,6 +280,12 @@ The screen is handed over as a digest, not as the raw tree - one line per elemen
 instead of a JSON object per node, three or four kilobytes where the tree is
 thirty to sixty.
 
+The tool block itself is 3.2 KB with screenshots off, measured rather than
+guessed, and it is re-sent on every step of every task - so the descriptions are
+one line each and the working rules live in the system prompt, which is stated
+once. Screenshots are one switch, not two: "Send screenshots (the model must
+accept images)".
+
 ## The policy
 
 Every call is classified from its name and its arguments. **What the model says
@@ -339,6 +345,14 @@ a row, when three tool calls in a row do not parse, and whenever Stop is pressed
 including in the middle of a model call, which is disconnected rather than waited
 out. Both limits are read when the task starts, so changing them under a running
 task does not widen it.
+
+Stop is checked in the three places it used to be missed: the client asks a stop
+predicate as well as its own flag, so a Stop landing before the connection is
+even open is honoured; a 200 that arrives after Stop is not returned as an
+answer; and Stop interrupts the runner thread, so a settle wait or a thirty
+second backoff ends rather than running out. A task that repeats itself is
+"stuck" only if it has made no progress in between - a recovered hiccup no
+longer counts towards it forever.
 
 ## Where the screen goes
 
