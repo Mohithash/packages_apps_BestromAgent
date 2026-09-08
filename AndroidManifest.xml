@@ -22,9 +22,12 @@
   settings activity is enabled because it is the door - an activity nobody
   starts costs nothing, holds no binding and starts no process. There is
   deliberately no <receiver>, no BOOT_COMPLETED, no JobService, no
-  NotificationListenerService and no <provider> anywhere in this file, and there
-  is no android.permission.INTERNET: the bridge is a unix abstract socket
-  reached through adb forward.
+  NotificationListenerService and no <provider> anywhere in this file.
+
+  INTERNET is here for exactly one class, brain/OpenAiCompatClient. It is a
+  normal permission, granted at install, so the privileged allowlist is
+  unchanged and still holds two entries. The adb bridge itself is still a unix
+  abstract socket with no address outside the device.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -35,6 +38,7 @@
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
 
     <!-- normal / signature, no allowlist entry -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />

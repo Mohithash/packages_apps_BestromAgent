@@ -57,6 +57,10 @@ prebuilt_etc {
 
 // The protocol pieces that hold no Android state, compiled for the host so the
 // framing, the pairing code and the rate limiter can be tested without a device.
+//
+// Everything listed here must stay free of android.* imports. org.json comes
+// from json-prebuilt, which is the platform's own org.json built for the host,
+// so the same source compiles against the framework on the device.
 java_library_host {
     name: "BestromAgent-protocol",
 
@@ -66,6 +70,15 @@ java_library_host {
         "src/com/bestrom/agent/bridge/Peer.kt",
         "src/com/bestrom/agent/bridge/RateLimiter.kt",
         "src/com/bestrom/agent/audit/AuditBounds.kt",
+        "src/com/bestrom/agent/brain/BrainConfig.kt",
+        "src/com/bestrom/agent/brain/BrainError.kt",
+        "src/com/bestrom/agent/brain/ChatRequest.kt",
+        "src/com/bestrom/agent/brain/ChatResponse.kt",
+        "src/com/bestrom/agent/brain/OpenAiCompatClient.kt",
+    ],
+
+    static_libs: [
+        "json-prebuilt",
     ],
 }
 
