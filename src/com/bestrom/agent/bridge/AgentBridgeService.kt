@@ -39,6 +39,7 @@ import com.bestrom.agent.runner.AgentRunner
 import com.bestrom.agent.runner.Task
 import com.bestrom.agent.toggle.AgentToggle
 import com.bestrom.agent.ui.AgentSettingsActivity
+import com.bestrom.agent.ui.AgentTaskActivity
 import java.io.BufferedInputStream
 import java.io.OutputStream
 import java.util.Collections
@@ -478,6 +479,16 @@ class AgentBridgeService : Service(), Methods.Host {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 PendingIntent.FLAG_IMMUTABLE,
             )
+        // Ask only opens the task screen with an empty field. Nothing anywhere
+        // starts a task without a goal typed in that moment.
+        val ask =
+            PendingIntent.getActivity(
+                this,
+                3,
+                Intent(this, AgentTaskActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE,
+            )
         val stop =
             PendingIntent.getService(
                 this,
@@ -492,6 +503,14 @@ class AgentBridgeService : Service(), Methods.Host {
             .setContentIntent(open)
             .setOngoing(true)
             .setShowWhen(false)
+            .addAction(
+                Notification.Action.Builder(
+                        null as android.graphics.drawable.Icon?,
+                        getString(R.string.notification_ask),
+                        ask,
+                    )
+                    .build()
+            )
             .addAction(
                 Notification.Action.Builder(
                         null as android.graphics.drawable.Icon?,
@@ -515,8 +534,8 @@ class AgentBridgeService : Service(), Methods.Host {
         val open =
             PendingIntent.getActivity(
                 this,
-                0,
-                Intent(this, AgentSettingsActivity::class.java)
+                4,
+                Intent(this, AgentTaskActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 PendingIntent.FLAG_IMMUTABLE,
             )

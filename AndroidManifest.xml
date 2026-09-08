@@ -66,6 +66,17 @@
             android:permission="android.permission.WRITE_SECURE_SETTINGS"
             android:label="@string/agent_title" />
 
+        <!-- The task screen. Registered here so the Agent mode screen and the
+             notification can reach it; the assist filter that lets the platform
+             start it comes with the assistant entry. -->
+        <activity
+            android:name=".ui.AgentTaskActivity"
+            android:enabled="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:label="@string/agent_task_title"
+            android:theme="@android:style/Theme.DeviceDefault.Settings" />
+
         <service
             android:name=".bridge.AgentBridgeService"
             android:enabled="false"
