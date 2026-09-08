@@ -44,9 +44,20 @@ object AgentState {
     @Volatile
     var a11y: AgentAccessibilityService? = null
 
-    /** The six digits currently on screen, or null while the bridge is off. */
+    /**
+     * The six digits currently on screen, or null when there is no live code -
+     * the bridge is off, or the code was spent on a successful pairing.
+     *
+     * Written only from the Auth rotation listener, so whatever rotates the
+     * code - the New code button or three wrong guesses over the wire - the
+     * screen and the secret cannot drift apart.
+     */
     @Volatile
     var pairingCode: String? = null
+
+    /** System.currentTimeMillis() until which pairing is refused, or 0. */
+    @Volatile
+    var pairingCooldownUntilMs: Long = 0
 
     /**
      * Connections closed because the peer was neither shell nor root.
@@ -63,5 +74,6 @@ object AgentState {
         bridgeLive.set(false)
         paired.set(false)
         pairingCode = null
+        pairingCooldownUntilMs = 0
     }
 }

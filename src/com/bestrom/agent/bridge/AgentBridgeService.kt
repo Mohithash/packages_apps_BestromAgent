@@ -150,8 +150,13 @@ class AgentBridgeService : Service(), Methods.Host {
             }
         server = socket
         running.set(true)
+        // The screen renders whatever this publishes, so a rotation from any
+        // source - the button, or three wrong codes on the wire - reaches it.
+        auth.setCodeListener { code, cooldownUntilMs ->
+            AgentState.pairingCode = code.ifEmpty { null }
+            AgentState.pairingCooldownUntilMs = cooldownUntilMs
+        }
         auth.start(System.currentTimeMillis())
-        AgentState.pairingCode = auth.currentCode()
         AgentState.paired.set(false)
         lastRequestMs.set(SystemClock.uptimeMillis())
         // Only now is the bridge live; the accessibility component is enabled
@@ -302,13 +307,10 @@ class AgentBridgeService : Service(), Methods.Host {
                     client.soTimeout = CONNECTION_IDLE_MS
                 }
 
-                if (session.strikes >= Auth.MAX_STRIKES) {
-                    AgentState.pairingCode = auth.currentCode()
-                    break
-                }
+                if (session.strikes >= Auth.MAX_STRIKES) break
                 if (stopRequested.get()) {
                     // The reply is out; now run the whole off sequence.
-                    callbackExecutor.execute { AgentToggle(applicationContext).turnOff() }
+                    runOffSequence()
                     break
                 }
             }
@@ -357,7 +359,7 @@ class AgentBridgeService : Service(), Methods.Host {
             }
             if (idle > BRIDGE_IDLE_MS) {
                 Log.i(TAG, "bridge idle; stopping Agent mode")
-                callbackExecutor.execute { AgentToggle(applicationContext).turnOff() }
+                runOffSequence()
                 return
             }
         }
@@ -422,6 +424,18 @@ class AgentBridgeService : Service(), Methods.Host {
 
     // ---------------------------------------------------------------- shutdown
 
+    /**
+     * Runs the off sequence on a thread of its own.
+     *
+     * Not on callbackExecutor: turnOff() ends in stopSelf(), whose onDestroy
+     * calls shutdownNow() on that executor and would interrupt the very thread
+     * still inside reconcileOff(), leaving the component enabled and our name
+     * in ENABLED_ACCESSIBILITY_SERVICES.
+     */
+    private fun runOffSequence() {
+        Thread({ AgentToggle(applicationContext).turnOff() }, "agent-off").start()
+    }
+
     private fun shutdown() {
         if (!running.getAndSet(false)) {
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -430,8 +444,10 @@ class AgentBridgeService : Service(), Methods.Host {
         }
         AgentState.bridgeLive.set(false)
         AgentState.paired.set(false)
-        AgentState.pairingCode = null
         auth.clear()
+        auth.setCodeListener(null)
+        AgentState.pairingCode = null
+        AgentState.pairingCooldownUntilMs = 0
         rateLimiter.reset()
 
         try {
@@ -463,10 +479,15 @@ class AgentBridgeService : Service(), Methods.Host {
         }
     }
 
-    /** Regenerates the code the settings screen shows. */
+    /**
+     * Issues a fresh code and drops any pairing with it.
+     *
+     * This is the New code button, and the way to pair a second client: a code
+     * pairs once, and agent.pair is refused while a token is out.
+     */
     fun regenerateCode(): String {
-        val code = auth.newCode(System.currentTimeMillis())
-        AgentState.pairingCode = code
+        val code = auth.reissue(System.currentTimeMillis())
+        AgentState.paired.set(false)
         return code
     }
 }

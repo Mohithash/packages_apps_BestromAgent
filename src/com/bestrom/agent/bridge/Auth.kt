@@ -59,6 +59,19 @@ class Auth(private val random: SecureRandom = SecureRandom()) {
         class Ok(val token: String, val expiresAtMs: Long) : PairResult()
         object BadCode : PairResult()
         class Cooldown(val retryAfterMs: Long) : PairResult()
+
+        /** A token is already out. Re-pairing goes through New code on the phone. */
+        object AlreadyPaired : PairResult()
+    }
+
+    /**
+     * Told whenever the code or the cooldown changes, whoever changed it.
+     *
+     * The screen renders what this publishes, so a rotation triggered by three
+     * wrong codes over the wire cannot leave it showing a dead secret.
+     */
+    fun interface CodeListener {
+        fun onCodeChanged(code: String, cooldownUntilMs: Long)
     }
 
     @Volatile
@@ -72,6 +85,20 @@ class Auth(private val random: SecureRandom = SecureRandom()) {
 
     private var strikes = 0
     private var cooldownUntilMs = 0L
+
+    @Volatile
+    private var listener: CodeListener? = null
+
+    /** Installs the rotation listener and publishes the current state to it. */
+    @Synchronized
+    fun setCodeListener(newListener: CodeListener?) {
+        listener = newListener
+        publish()
+    }
+
+    private fun publish() {
+        listener?.onCodeChanged(code, cooldownUntilMs)
+    }
 
     /** Generates the first code. Called when the bridge binds its socket. */
     @Synchronized
@@ -87,7 +114,24 @@ class Auth(private val random: SecureRandom = SecureRandom()) {
         val n = random.nextInt(1_000_000)
         code = String.format("%06d", n)
         codeIssuedAtMs = nowMs
+        publish()
         return code
+    }
+
+    /**
+     * Rotates the code and drops the pairing with it.
+     *
+     * This is the New code button, and the only way to pair a second client:
+     * a successful pair burns its code, and pair() refuses while a token is
+     * out. It also lifts a cooldown, so a peer guessing codes cannot keep the
+     * maintainer from re-pairing.
+     */
+    @Synchronized
+    fun reissue(nowMs: Long): String {
+        token = null
+        strikes = 0
+        cooldownUntilMs = 0
+        return newCode(nowMs)
     }
 
     @Synchronized
@@ -104,17 +148,20 @@ class Auth(private val random: SecureRandom = SecureRandom()) {
         strikes = 0
         cooldownUntilMs = 0
         codeIssuedAtMs = 0
+        publish()
     }
 
     /**
      * Checks a pairing code. Three wrong ones regenerate the code, start a
-     * cooldown and, at the call site, close the connection.
+     * cooldown and, at the call site, close the connection. A code is good for
+     * exactly one pairing and only while no token is out.
      */
     @Synchronized
     fun pair(candidate: String?, nowMs: Long): PairResult {
         if (nowMs < cooldownUntilMs) {
             return PairResult.Cooldown(cooldownUntilMs - nowMs)
         }
+        if (token != null) return PairResult.AlreadyPaired
         val expired = codeIssuedAtMs == 0L || nowMs - codeIssuedAtMs > CODE_VALID_MS
         val match = constantTimeEquals(code, candidate) && !expired
         if (!match) {
@@ -131,7 +178,13 @@ class Auth(private val random: SecureRandom = SecureRandom()) {
         random.nextBytes(bytes)
         val issued = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
         token = issued
-        return PairResult.Ok(issued, codeIssuedAtMs + CODE_VALID_MS)
+        val expiresAtMs = codeIssuedAtMs + CODE_VALID_MS
+        // Single use. The six digits that paired this client never pair
+        // another, so anyone who reads them off the screen afterwards is late.
+        code = ""
+        codeIssuedAtMs = 0
+        publish()
+        return PairResult.Ok(issued, expiresAtMs)
     }
 
     /** Re-authenticates a reconnecting client. */

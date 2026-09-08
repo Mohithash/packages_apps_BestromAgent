@@ -33,7 +33,9 @@
 
     <string name="pairing_header">Pairing code</string>
     <string name="pairing_new_code">New code</string>
-    <string name="pairing_hint">Type this on the computer to pair. It changes each time Agent mode starts.</string>
+    <string name="pairing_hint">Type this on the computer to pair. It works once, then a new code is needed.</string>
+    <string name="pairing_used">Paired. Press New code to pair another computer; the one paired now stops working.</string>
+    <string name="pairing_cooldown">Pairing is refused for another %1$d s after three wrong codes.</string>
 
     <string name="can_do_header">What the agent can do</string>
     <string name="can_do_body">Read what is on screen.\nTap, swipe and type.\nTake a screenshot.\nOpen apps.\nCall app functions Settings and other apps publish.</string>

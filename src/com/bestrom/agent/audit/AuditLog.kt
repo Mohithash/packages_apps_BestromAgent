@@ -29,15 +29,19 @@ import org.json.JSONObject
  * An append-only, bounded record of what the bridge was asked to do.
  *
  * It records WHAT was called and against WHAT: a package and function name, a
- * resource id, a key name. Never a parameter value, never node text, never the
- * typed string, never the token. It holds 500 entries and rewrites the file when
- * it overflows, so it cannot grow without bound and cannot be edited selectively
- * from the bridge - log.clear removes everything or nothing.
+ * resource id, a key name, plus the uid and connection that asked. Never a
+ * parameter value, never node text, never the typed string, never the token. It
+ * holds 500 entries and rewrites the file a block at a time when it overflows,
+ * so it cannot grow without bound and cannot be edited selectively from the
+ * bridge - log.clear removes everything or nothing, and says so in the log.
  */
 class AuditLog(private val file: File) {
 
     companion object {
-        const val CAPACITY = 500
+        const val CAPACITY = AuditBounds.CAPACITY
+
+        /** The peer uid of an entry the phone wrote itself, not the bridge. */
+        const val UID_NONE = -1
 
         @Volatile
         private var instance: AuditLog? = null
@@ -70,6 +74,10 @@ class AuditLog(private val file: File) {
         val result: String,
         val errorCode: Int?,
         val durationMs: Long,
+        /** The uid on the other end of the socket, or [UID_NONE]. */
+        val peerUid: Int = UID_NONE,
+        /** Which connection asked, so a burst is distinguishable after the fact. */
+        val connectionId: Int = 0,
     ) {
         fun toJson(): JSONObject =
             JSONObject()
@@ -79,6 +87,8 @@ class AuditLog(private val file: File) {
                 .put("result", result)
                 .put("error_code", errorCode ?: JSONObject.NULL)
                 .put("duration_ms", durationMs)
+                .put("peer_uid", peerUid)
+                .put("connection_id", connectionId)
 
         companion object {
             fun fromJson(o: JSONObject): Entry =
@@ -89,6 +99,8 @@ class AuditLog(private val file: File) {
                     o.optString("result"),
                     if (o.isNull("error_code")) null else o.optInt("error_code"),
                     o.optLong("duration_ms"),
+                    o.optInt("peer_uid", UID_NONE),
+                    o.optInt("connection_id", 0),
                 )
         }
     }
@@ -125,13 +137,27 @@ class AuditLog(private val file: File) {
         result: String,
         errorCode: Int?,
         durationMs: Long,
+        peerUid: Int = UID_NONE,
+        connectionId: Int = 0,
         nowMs: Long = System.currentTimeMillis(),
     ) {
         load()
-        val entry = Entry(utcFormat().format(Date(nowMs)), method, target, result, errorCode, durationMs)
+        val entry =
+            Entry(
+                utcFormat().format(Date(nowMs)),
+                method,
+                target,
+                result,
+                errorCode,
+                durationMs,
+                peerUid,
+                connectionId,
+            )
         entries.addLast(entry)
         if (entries.size > CAPACITY) {
-            while (entries.size > CAPACITY) entries.removeFirst()
+            // A block at a time, so the rewrite is one append in fifty.
+            val keep = AuditBounds.sizeAfterOverflow(entries.size)
+            while (entries.size > keep) entries.removeFirst()
             rewrite()
         } else {
             try {
@@ -171,9 +197,15 @@ class AuditLog(private val file: File) {
         return entries.size
     }
 
-    /** Removes everything and returns how many entries went. */
+    /**
+     * Removes everything and returns how many entries went.
+     *
+     * The clear itself is written back as the first entry of the fresh log, so
+     * an empty log is never mistaken for one that was never used - whether the
+     * Clear button on the settings screen or log.clear over the wire did it.
+     */
     @Synchronized
-    fun clear(): Int {
+    fun clear(peerUid: Int = UID_NONE, connectionId: Int = 0): Int {
         load()
         val n = entries.size
         entries.clear()
@@ -181,6 +213,7 @@ class AuditLog(private val file: File) {
             file.delete()
         } catch (ignored: Exception) {
         }
+        append("log.clear", "", "ok", null, 0, peerUid, connectionId)
         return n
     }
 }

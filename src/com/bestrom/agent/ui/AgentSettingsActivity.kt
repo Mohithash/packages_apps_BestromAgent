@@ -62,6 +62,8 @@ class AgentSettingsActivity : Activity() {
     private lateinit var statusRefused: TextView
     private lateinit var pairingGroup: LinearLayout
     private lateinit var pairingCode: TextView
+    private lateinit var pairingHint: TextView
+    private lateinit var pairingCooldown: TextView
     private lateinit var emptyLabel: TextView
     private lateinit var clearButton: Button
     private lateinit var excludedSummary: TextView
@@ -95,6 +97,8 @@ class AgentSettingsActivity : Activity() {
         statusRefused = findViewById(R.id.status_refused)
         pairingGroup = findViewById(R.id.pairing_group)
         pairingCode = findViewById(R.id.pairing_code)
+        pairingHint = findViewById(R.id.pairing_hint)
+        pairingCooldown = findViewById(R.id.pairing_cooldown)
         emptyLabel = findViewById(R.id.activity_empty)
         clearButton = findViewById(R.id.clear_log)
         excludedSummary = findViewById(R.id.excluded_summary)
@@ -250,10 +254,27 @@ class AgentSettingsActivity : Activity() {
             if (peerRefusals == 0 && preAuthRefusals == 0) getString(R.string.status_refused_none)
             else getString(R.string.status_refused, peerRefusals, preAuthRefusals)
 
+        // A code pairs once. With none live the group stays up, because New
+        // code inside it is the only way to pair again.
         val code = AgentState.pairingCode
-        if (on && code != null) {
+        if (on) {
             pairingGroup.visibility = View.VISIBLE
-            pairingCode.text = code
+            if (code.isNullOrEmpty()) {
+                pairingCode.visibility = View.GONE
+                pairingHint.setText(R.string.pairing_used)
+            } else {
+                pairingCode.visibility = View.VISIBLE
+                pairingCode.text = code
+                pairingHint.setText(R.string.pairing_hint)
+            }
+            val cooldownMs = AgentState.pairingCooldownUntilMs - System.currentTimeMillis()
+            if (cooldownMs > 0) {
+                pairingCooldown.visibility = View.VISIBLE
+                pairingCooldown.text =
+                    getString(R.string.pairing_cooldown, (cooldownMs + 999) / 1000)
+            } else {
+                pairingCooldown.visibility = View.GONE
+            }
         } else {
             pairingGroup.visibility = View.GONE
         }

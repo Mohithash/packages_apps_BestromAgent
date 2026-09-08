@@ -55,7 +55,7 @@ batches, no notifications. Requests are capped at 1 MiB, responses at 8 MiB.
 | method | auth | confirm | notes |
 | --- | --- | --- | --- |
 | `agent.hello` | none | no | device and capability report, no user content |
-| `agent.pair` | none | no | six digit code from the phone screen, returns a token |
+| `agent.pair` | none | no | six digit code from the phone screen, single use, returns a token |
 | `agent.auth` | none | no | re-authenticate with the token already held |
 | `functions.list` | session | no | `searchAppFunctions`, AppSearch as the fallback |
 | `functions.execute` | session | yes | a `PendingIntent` in the extras is reported, never launched |
@@ -87,7 +87,9 @@ Defended, independently of the signing key:
 * No persistence: nothing in the boot path, nothing restored after a reboot.
 * No silent power: a code on the phone screen to pair, a token that lives in
   memory only, an ongoing notification, three independent stops, and a thirty
-  minute idle timeout.
+  minute idle timeout. The code pairs exactly once and a second `agent.pair` is
+  refused while a token is out, so New code on the phone is the only way to
+  hand the session to another client.
 * A confirmation floor against a client that forgets, not against one that is
   hostile: the MCP host sets `confirm: true` on every acting call it makes, so
   the phone's own check is a floor under a buggy client, not a second gate.
@@ -106,7 +108,9 @@ Defended, independently of the signing key:
   password fields, which are refused with a distinct error code so "blocked" is
   never mistaken for "empty".
 * An audit log the model cannot rewrite selectively: append only, bounded at 500
-  entries, values never recorded, readable in Settings, clearable only wholesale.
+  entries, values never recorded, the peer uid and connection recorded with
+  every entry, readable in Settings, and clearable only wholesale - a clear is
+  itself the first entry of the fresh log, from the wire or from the screen.
 
 Not defended, and said plainly because the opposite was claimed here before:
 

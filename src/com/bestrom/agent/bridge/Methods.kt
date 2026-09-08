@@ -286,12 +286,17 @@ object Methods {
             if (errorCode != null) AgentState.preAuthRefusals.incrementAndGet()
             return response
         }
+        // log.clear writes itself into the fresh log as its first entry, so a
+        // second one here would double it.
+        if (method == "log.clear" && errorCode == null) return response
         host.audit.append(
             method,
             target,
             if (errorCode == null) "ok" else "error",
             errorCode,
             System.currentTimeMillis() - started,
+            session.peerUid,
+            session.connectionId,
         )
         return response
     }
@@ -389,6 +394,13 @@ object Methods {
                 JsonRpc.RATE_LIMITED,
                 "too many wrong codes",
                 JSONObject().put("retry_after_ms", outcome.retryAfterMs),
+            )
+        }
+        if (outcome is Auth.PairResult.AlreadyPaired) {
+            throw JsonRpc.RpcException(
+                JsonRpc.BAD_PAIRING_CODE,
+                "already paired; press New code on the phone to pair again",
+                JSONObject().put("reason", "already_paired"),
             )
         }
         if (outcome !is Auth.PairResult.Ok) {
@@ -812,7 +824,7 @@ object Methods {
     }
 
     private fun logClear(host: Host, session: Session, params: JSONObject): JSONObject {
-        val cleared = host.audit.clear()
+        val cleared = host.audit.clear(session.peerUid, session.connectionId)
         return JSONObject().put("cleared", cleared)
     }
 }
