@@ -77,6 +77,7 @@ java_library_host {
         "src/com/bestrom/agent/brain/OpenAiCompatClient.kt",
         "src/com/bestrom/agent/runner/FunctionCatalog.kt",
         "src/com/bestrom/agent/runner/InjectionFilter.kt",
+        "src/com/bestrom/agent/runner/PolicyEngine.kt",
         "src/com/bestrom/agent/runner/ScreenDigest.kt",
         "src/com/bestrom/agent/runner/ToolSchema.kt",
     ],

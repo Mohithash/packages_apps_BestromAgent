@@ -45,6 +45,8 @@ object ScreenDigest {
         val cls: String,
         val pkg: String,
         val line: String,
+        /** What to call this element in a sentence a person reads. */
+        val label: String,
         val password: Boolean,
         val editable: Boolean,
         val clickable: Boolean,
@@ -145,6 +147,7 @@ object ScreenDigest {
                         node.optString("cls"),
                         node.optString("pkg"),
                         line.trimStart(),
+                        labelOf(node),
                         node.optBoolean("password", false),
                         node.optBoolean("editable", false),
                         node.optBoolean("clickable", false),
@@ -189,6 +192,25 @@ object ScreenDigest {
         if (node.optBoolean("scrollable", false)) return true
         if (!node.isNull("checked")) return true
         return false
+    }
+
+    /**
+     * The name a person would use for this element.
+     *
+     * A password node has no text and no description in the tree, so it falls
+     * through to its resource id or its class, which is what the confirm sheet
+     * should say about it anyway.
+     */
+    private fun labelOf(node: JSONObject): String {
+        val text = node.optString("text")
+        if (text.isNotEmpty()) return InjectionFilter.sanitise(text, 64)
+        val desc = node.optString("desc")
+        if (desc.isNotEmpty()) return InjectionFilter.sanitise(desc, 64)
+        val hint = node.optString("hint")
+        if (hint.isNotEmpty()) return InjectionFilter.sanitise(hint, 64)
+        val resId = node.optString("res_id")
+        if (resId.isNotEmpty()) return resId.substringAfter("id/")
+        return node.optString("cls")
     }
 
     private fun render(node: JSONObject, depth: Int): String {
