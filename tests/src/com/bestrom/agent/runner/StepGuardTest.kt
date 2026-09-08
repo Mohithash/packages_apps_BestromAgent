@@ -149,6 +149,38 @@ class StepGuardTest {
     }
 
     @Test
+    fun progressBetweenTwoStallsDoesNotAddUpToStuck() {
+        // A 25 step task that repeats a call at step 3, sits on a screen at
+        // step 12 and repeats an error at step 20, with progress in between,
+        // is not one stuck task - and it used to end as one.
+        val guard = StepGuard(25, 100000)
+        repeat(2) { guard.noteCall("tap {}") }
+        assertEquals(StepGuard.Signal.HINT, guard.noteCall("tap {}"))
+        guard.noteProgress()
+
+        guard.noteScreen("a")
+        guard.noteScreen("a")
+        assertEquals(StepGuard.Signal.HINT, guard.noteScreen("a"))
+        guard.noteProgress()
+
+        guard.noteError("nope")
+        guard.noteError("nope")
+        assertEquals(StepGuard.Signal.HINT, guard.noteError("nope"))
+    }
+
+    @Test
+    fun withoutProgressItStillEscalatesToATerminate() {
+        val guard = StepGuard(25, 100000)
+        repeat(3) { guard.noteCall("tap {}") }
+        guard.noteScreen("x")
+        guard.noteScreen("x")
+        assertEquals(StepGuard.Signal.CHANGE_STRATEGY, guard.noteScreen("x"))
+        guard.noteError("nope")
+        guard.noteError("nope")
+        assertEquals(StepGuard.Signal.TERMINATE, guard.noteError("nope"))
+    }
+
+    @Test
     fun eachSignalHasSomethingToSayToTheModel() {
         val guard = StepGuard(25, 100000)
         val control = "[BestROM 7f3a91]"

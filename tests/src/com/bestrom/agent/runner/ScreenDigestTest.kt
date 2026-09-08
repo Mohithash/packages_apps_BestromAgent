@@ -159,6 +159,28 @@ class ScreenDigestTest {
     }
 
     @Test
+    fun aPasswordNodeIsBlankedHereEvenWhenTheTreeCarriesText() {
+        // The tree omits them upstream. This file is what leaves the phone,
+        // so it holds the guarantee locally as well.
+        val tree = settingsTree()
+        val nodes = tree.getJSONArray("nodes")
+        for (i in 0 until nodes.length()) {
+            val node = nodes.getJSONObject(i)
+            if (!node.optBoolean("password", false)) continue
+            node.put("text", "hunter2")
+            node.put("desc", "the PIN is 4321")
+            node.put("hint", "Enter your PIN")
+        }
+        val digest = ScreenDigest.of(tree)
+        assertFalse(digest.text.contains("hunter2"))
+        assertFalse(digest.text.contains("4321"))
+        assertFalse(digest.text.contains("Enter your PIN"))
+        val pin = digest.nodes.first { it.line.contains("#pin") }
+        assertEquals("pin", pin.label)
+        assertEquals("pin", pin.resId)
+    }
+
+    @Test
     fun nodeIdsInTheDigestAreTheOnesTheBridgeExpects() {
         val tree = settingsTree()
         val digest = ScreenDigest.of(tree)

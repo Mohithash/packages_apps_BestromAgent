@@ -116,7 +116,10 @@ class ToolDispatch(private val host: Methods.Host) {
         if (stale != null) {
             return Outcome.Failed(JsonRpc.STALE_TREE, stale, null)
         }
-        return call(toolCall.tool.method, ToolSchema.bridgeParams(toolCall, treeId, confirm))
+        val method =
+            ToolSchema.BRIDGE[toolCall.name]
+                ?: return Outcome.Failed(JsonRpc.INVALID_PARAMS, "that tool does nothing", null)
+        return call(method, ToolSchema.bridgeParams(toolCall, treeId, confirm))
     }
 
     /**
@@ -149,11 +152,5 @@ class ToolDispatch(private val host: Methods.Host) {
     }
 
     /** The methods whose result is worth a fresh look at the screen. */
-    fun changesTheScreen(name: String): Boolean =
-        name == ToolSchema.TAP ||
-            name == ToolSchema.LONG_PRESS ||
-            name == ToolSchema.SWIPE ||
-            name == ToolSchema.TYPE ||
-            name == ToolSchema.KEY ||
-            name == ToolSchema.LAUNCH_APP
+    fun changesTheScreen(name: String): Boolean = ToolSchema.CHANGES_SCREEN.contains(name)
 }

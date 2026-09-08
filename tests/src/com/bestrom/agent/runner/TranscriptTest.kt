@@ -145,6 +145,45 @@ class TranscriptTest {
     }
 
     @Test
+    fun theOpeningScreenAgesLikeEveryOtherScreen() {
+        val transcript = Transcript()
+        transcript.addUser("turn on battery saver")
+        transcript.addScreen(
+            boundary.envelope("read_screen", "com.android.settings", "the opening screen")
+        )
+        for (n in 1..6) round(transcript, n)
+        val sent = transcript.forSend()
+        val contents = contents(sent)
+        // It used to ride in the first user message for the whole task.
+        assertFalse(contents.any { it.contains("the opening screen") })
+        val placeholder = sent.first { it.content == Transcript.SCREEN_OMITTED }
+        // And it collapses to the role it had, not to a tool reply with no
+        // tool call to answer.
+        assertEquals(ChatMessage.USER, placeholder.role)
+        assertTrue(contents.any { it == "turn on battery saver" })
+    }
+
+    @Test
+    fun onlyTheNewestScreenshotIsCarried() {
+        val transcript = Transcript()
+        transcript.addUser("read the chart")
+        transcript.addImage("The screenshot.", "QUFBQQ==")
+        transcript.addAssistant(null, listOf(ChatMessage.Call("c1", "screenshot", "{}")))
+        transcript.addToolResult("c1", "screenshot taken", false)
+        transcript.addImage("The screenshot.", "QkJCQg==")
+
+        val sent = transcript.forSend()
+        val json = sent.map { it.toJson().toString() }
+        assertFalse("the older PNG was re-sent", json.any { it.contains("QUFBQQ==") })
+        assertTrue(json.any { it.contains("QkJCQg==") })
+        assertTrue(sent.any { it.content == Transcript.SCREENSHOT_OMITTED })
+        // The placeholder carries no image part at all.
+        val omitted = sent.first { it.content == Transcript.SCREENSHOT_OMITTED }
+        assertEquals(ChatMessage.USER, omitted.role)
+        assertFalse(omitted.toJson().toString().contains("image_url"))
+    }
+
+    @Test
     fun aScreenshotIsAUserMessageWithAnImagePart() {
         val transcript = Transcript()
         transcript.addImage("The screenshot.", "aGVsbG8=")

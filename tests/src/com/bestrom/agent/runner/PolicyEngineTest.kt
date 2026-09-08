@@ -53,6 +53,29 @@ class PolicyEngineTest {
         return (v as ToolSchema.Validation.Valid).call
     }
 
+    /** A one-row screen in [pkg], with the row labelled and identified. */
+    private fun row(pkg: String, label: String, resId: String): ScreenDigest.Digest =
+        ScreenDigest.of(
+            JSONObject()
+                .put("tree_id", "t1")
+                .put("window", JSONObject().put("package", pkg).put("title", "Settings"))
+                .put(
+                    "nodes",
+                    JSONArray()
+                        .put(
+                            JSONObject()
+                                .put("id", 0)
+                                .put("cls", "LinearLayout")
+                                .put("pkg", pkg)
+                                .put("text", label)
+                                .put("res_id", "$pkg:id/$resId")
+                                .put("bounds", JSONArray().put(0).put(0).put(100).put(100))
+                                .put("clickable", true)
+                        )
+                )
+                .put("truncated", false)
+        )
+
     /** A one-node screen in [pkg], with one ordinary field and one password field. */
     private fun screen(pkg: String): ScreenDigest.Digest {
         val nodes =
@@ -252,6 +275,103 @@ class PolicyEngineTest {
     }
 
     @Test
+    fun aTapOnAScreenLockRowIsRefusedEvenWithAllowAll() {
+        // The same settings the key list refuses, reached the other way.
+        val rows =
+            listOf(
+                "Screen lock" to "screen_lock",
+                "Fingerprint" to "biometric_settings",
+                "Face Unlock" to "face_settings",
+                "Developer options" to "development_settings",
+                "USB debugging" to "adb_switch",
+                "Accessibility" to "accessibility_settings",
+                "Factory reset" to "reset_options",
+                "Install unknown apps" to "unknown_sources",
+            )
+        val tap = call(ToolSchema.TAP, """{"node_id":0}""")
+        val type = call(ToolSchema.TYPE, """{"text":"1234","node_id":0}""")
+        for ((label, resId) in rows) {
+            val screen = row("com.android.settings", label, resId)
+            for (autonomous in listOf(false, true)) {
+                for (allowAll in listOf(false, true)) {
+                    for (call in listOf(tap, type)) {
+                        val decision = engine(autonomous = autonomous).decide(call, screen, allowAll)
+                        assertTrue(
+                            "$label ${call.name} (autonomous=$autonomous allowAll=$allowAll)",
+                            decision is PolicyEngine.Decision.Refuse,
+                        )
+                    }
+                }
+            }
+            assertEquals(label, PolicyEngine.Tier.FORBIDDEN, engine().tier(tap, screen))
+        }
+        // An ordinary Settings row is not refused; it asks.
+        val ordinary = row("com.android.settings", "Battery saver", "switch_widget")
+        assertEquals(PolicyEngine.Tier.ALWAYS_CONFIRM, engine().tier(tap, ordinary))
+        // And "Clock" is not "lock".
+        val clock = row("com.android.settings", "Clock", "clock_row")
+        assertEquals(PolicyEngine.Tier.ALWAYS_CONFIRM, engine().tier(tap, clock))
+    }
+
+    @Test
+    fun aTapOnTheAgentsOwnScreenIsRefused() {
+        // Recents and the Powerhub row both reach this screen, and one tap on
+        // it turns Autonomous on for every later task.
+        val screen = screen("com.bestrom.agent")
+        for (call in
+            listOf(
+                call(ToolSchema.TAP, """{"node_id":0}"""),
+                call(ToolSchema.TAP, """{"x":10,"y":20}"""),
+                call(ToolSchema.LONG_PRESS, """{"node_id":0}"""),
+                call(ToolSchema.TYPE, """{"text":"x","node_id":0}"""),
+                call(ToolSchema.SWIPE, """{"from":[10,90],"to":[10,10]}"""),
+            )) {
+            assertEquals(call.name, PolicyEngine.Tier.FORBIDDEN, engine().tier(call, screen))
+            val decision = engine(autonomous = true).decide(call, screen, true)
+            assertTrue(call.name, decision is PolicyEngine.Decision.Refuse)
+        }
+    }
+
+    @Test
+    fun aRefusedKeyIsFoundWhereverItIsPutInTheParameters() {
+        // No package pin, no "set" prefix, and nested one level down.
+        val nested =
+            call(
+                ToolSchema.CALL_FUNCTION,
+                JSONObject()
+                    .put("package", "com.example.vendorsettings")
+                    .put("function", "updateItem")
+                    .put(
+                        "params",
+                        JSONObject().put("body", JSONObject().put("id", "screen_lock_type")),
+                    )
+                    .toString(),
+            )
+        assertEquals(PolicyEngine.Tier.FORBIDDEN, engine().tier(nested, null))
+        val inAnArray =
+            call(
+                ToolSchema.CALL_FUNCTION,
+                JSONObject()
+                    .put("package", "com.example.vendorsettings")
+                    .put("function", "putAll")
+                    .put(
+                        "params",
+                        JSONObject().put("keys", JSONArray().put("brightness").put("adb_enabled")),
+                    )
+                    .toString(),
+            )
+        assertEquals(PolicyEngine.Tier.FORBIDDEN, engine().tier(inAnArray, null))
+    }
+
+    @Test
+    fun theSheetNamesTheRowAsWellAsTheApp() {
+        val screen = screen("com.example.notes")
+        val where = engine().describe(call(ToolSchema.TAP, """{"node_id":0}"""), screen).second
+        assertTrue(where, where.contains("com.example.notes"))
+        assertTrue(where, where.contains("#switch_widget"))
+    }
+
+    @Test
     fun aPaymentAppTheTaskDidNotNameIsRefusedRatherThanConfirmed() {
         val open = call(ToolSchema.LAUNCH_APP, """{"package":"com.example.bank"}""")
         val vague = engine(goal = "open my payment app")
@@ -272,6 +392,21 @@ class PolicyEngineTest {
             assertTrue(goal, decision is PolicyEngine.Decision.NeedsConfirm)
             assertTrue((decision as PolicyEngine.Decision.NeedsConfirm).sensitive)
         }
+    }
+
+    @Test
+    fun aShortLabelAnAppChoseForItselfDoesNotNameIt() {
+        // "Pay" as a label would otherwise make "pay the bill" name that app.
+        val apps =
+            listOf(
+                PolicyEngine.AppFacts("com.example.paylater", "Pay", billing = true),
+                PolicyEngine.AppFacts("com.example.bank", "Aurora Bank", hce = true),
+            )
+        val engine = PolicyEngine("pay the bill", apps, emptySet(), false)
+        assertFalse(engine.named.contains("com.example.paylater"))
+        // Two tokens, or the package name itself, still name it.
+        val named = PolicyEngine("open Aurora Bank", apps, emptySet(), false)
+        assertTrue(named.named.contains("com.example.bank"))
     }
 
     @Test

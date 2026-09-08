@@ -107,19 +107,65 @@ class ToolSchemaTest {
 
     @Test
     fun everyToolInTheSchemaHasABridgeMethodOrIsTerminal() {
-        // The dispatcher's when() is driven by this table, so a tool added
-        // without a method would be dispatched to nothing.
+        // The dispatcher reads ToolSchema.BRIDGE, so this is the mapping that
+        // actually runs and not a description of it.
+        assertEquals(
+            ToolSchema.TOOLS.map { it.name }.filter { it != ToolSchema.DONE }.toSet(),
+            ToolSchema.BRIDGE.keys,
+        )
+        assertEquals("", ToolSchema.tool(ToolSchema.DONE)!!.method)
         for (tool in ToolSchema.TOOLS) {
-            if (tool.name == ToolSchema.DONE) {
-                assertEquals("", tool.method)
-            } else {
-                assertTrue(tool.name, tool.method.startsWith("ui.") ||
-                    tool.method.startsWith("app.") || tool.method.startsWith("functions."))
-                // And it builds params without throwing, which is the other
-                // half of "wired up".
-                assertNotNull(ToolSchema.bridgeParams(sample(tool), "t1", true))
-            }
+            if (tool.name == ToolSchema.DONE) continue
+            val method = ToolSchema.BRIDGE[tool.name]!!
+            assertEquals(tool.name, tool.method, method)
+            assertTrue(tool.name, method.startsWith("ui.") ||
+                method.startsWith("app.") || method.startsWith("functions."))
+            // A tool with no branch in bridgeParams' when() dispatches an
+            // empty params object, which is the failure this catches.
+            val params = ToolSchema.bridgeParams(sample(tool), "t1", true)
+            assertTrue(tool.name, params.length() > 0)
         }
+    }
+
+    @Test
+    fun theScreenChangingSetIsMutatingAndDispatched() {
+        for (name in ToolSchema.CHANGES_SCREEN) {
+            assertTrue(name, ToolSchema.BRIDGE.containsKey(name))
+            assertTrue(name, ToolSchema.tool(name)!!.mutating)
+        }
+        // A read never triggers a fresh screen read of its own.
+        assertFalse(ToolSchema.CHANGES_SCREEN.contains(ToolSchema.READ_SCREEN))
+        assertFalse(ToolSchema.CHANGES_SCREEN.contains(ToolSchema.SCREENSHOT))
+    }
+
+    @Test
+    fun aNodeAddressedCallIsNeverBuiltWithoutATree() {
+        // Without a tree id the bridge answers -32602 "tree_id is required
+        // with node_id", which is an error about a parameter the model has
+        // never seen. It is answered as a stale tree instead.
+        for (name in listOf(ToolSchema.TAP, ToolSchema.LONG_PRESS)) {
+            val params = ToolSchema.bridgeParams(valid(name, """{"node_id":4}"""), null, true)
+            assertFalse(name, params.has("node_id"))
+            assertFalse(name, params.has("tree_id"))
+        }
+        val type =
+            ToolSchema.bridgeParams(
+                valid(ToolSchema.TYPE, """{"text":"hi","node_id":4}"""),
+                null,
+                true,
+            )
+        assertFalse(type.has("node_id"))
+        assertEquals("hi", type.getString("text"))
+    }
+
+    @Test
+    fun theToolBlockStaysUnderItsBudget() {
+        // Re-sent on every step of every task, and nothing caches it on most
+        // presets. Measured, not guessed.
+        assertTrue(
+            "tools(false) is " + ToolSchema.tools(false).toString().length,
+            ToolSchema.tools(false).toString().length < 3200,
+        )
     }
 
     /** A minimal well-formed call for each tool, used to prove it dispatches. */

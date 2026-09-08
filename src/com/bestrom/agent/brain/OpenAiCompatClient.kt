@@ -306,8 +306,8 @@ class OpenAiCompatClient(
                 return Attempt.Unreachable("the https endpoint did not open a TLS connection")
             }
             live = opened
-            // The window between openConnection and this line is the one
-            // cancel() cannot reach, so it is checked here, before the body
+            // The window between opening the connection and this line is the
+            // one cancel() cannot reach, so it is checked here, before the body
             // goes out.
             if (stopping()) return Attempt.Cancelled
             opened.requestMethod = "POST"

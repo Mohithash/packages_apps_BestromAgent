@@ -168,4 +168,24 @@ class ChatResponseTest {
             assertNotNull(ChatResponse.parse(body))
         }
     }
+
+    @Test
+    fun twoToolCallsCannotShareAnId() {
+        val body =
+            """
+            {"choices":[{"index":0,"message":{"role":"assistant","tool_calls":[
+              {"id":"call_a","type":"function","function":{"name":"tap","arguments":"{}"}},
+              {"id":"call_a","type":"function","function":{"name":"tap","arguments":"{}"}},
+              {"id":"call_a","type":"function","function":{"name":"key","arguments":"{}"}}
+            ]}}]}
+            """
+        val parsed = ChatResponse.parse(body)
+        assertTrue(parsed is ChatResponse.Parsed.Ok)
+        val calls = (parsed as ChatResponse.Parsed.Ok).response.toolCalls
+        assertEquals(3, calls.size)
+        // Two tool replies with one id is a 400 on some layers and a silently
+        // dropped reply on others.
+        assertEquals(3, calls.map { it.id }.toSet().size)
+        assertEquals("call_a", calls[0].id)
+    }
 }

@@ -22,10 +22,13 @@ import com.sun.net.httpserver.HttpServer
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -277,6 +280,75 @@ class OpenAiCompatClientTest {
         client.cancel()
         assertTrue(fail(call(client)) is BrainError.Cancelled)
         assertEquals(0, requests.get())
+    }
+
+    @Test
+    fun publicHostBehindAFragmentOrQueryIsRefused() {
+        // The shapes where a hand-written authority parser and java.net.URL
+        // disagree: both used to read as a private address here while the
+        // connection that carries the key went to evil.example.com.
+        for (url in
+            listOf(
+                "http://evil.example.com#@127.0.0.1/v1",
+                "http://evil.example.com?@10.0.0.1/v1",
+                "http://evil.example.com\\@127.0.0.1/v1",
+                "http://127.0.0.1@evil.example.com/v1",
+                "http://evil.example.com /v1",
+            )) {
+            assertNotNull(url, BrainUrl.reject(url))
+            assertTrue(url, fail(call(client(url = url))) is BrainError.Network)
+            assertEquals(url, 0, requests.get())
+        }
+        // And the host the checks read is the host the socket goes to.
+        assertEquals(
+            "evil.example.com",
+            BrainUrl.hostOf("http://evil.example.com#@127.0.0.1/v1"),
+        )
+        assertNull(BrainUrl.reject("http://127.0.0.1:8080/v1"))
+    }
+
+    @Test
+    fun aStopThatArrivesBeforeTheConnectionIsHonoured() {
+        // The window between the client being built and the caller storing it,
+        // where cancel() has nothing to cancel.
+        replies = listOf(Reply(200, okBody()))
+        assertTrue(fail(call(client(stopped = { true }))) is BrainError.Cancelled)
+        assertEquals(0, requests.get())
+    }
+
+    @Test
+    fun cancelUnderTheReadEndsTheCallRatherThanWaitingItOut() {
+        // A server that answers the headers and then sits on the body, so the
+        // client is inside the read - the case the old test never reached,
+        // because it cancelled before the call.
+        val reading = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        server.removeContext("/v1/chat/completions")
+        server.createContext("/v1/chat/completions") { exchange: HttpExchange ->
+            requests.incrementAndGet()
+            exchange.requestBody.readBytes()
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.write("{".toByteArray(Charsets.UTF_8))
+            exchange.responseBody.flush()
+            reading.countDown()
+            release.await(20, TimeUnit.SECONDS)
+            try {
+                exchange.responseBody.close()
+            } catch (e: Exception) {
+                // The client hung up, which is the point of the test.
+            }
+        }
+
+        val client = client()
+        val outcome = arrayOfNulls<OpenAiCompatClient.Outcome>(1)
+        val worker = Thread { outcome[0] = call(client) }
+        worker.start()
+        assertTrue("the client never reached the read", reading.await(15, TimeUnit.SECONDS))
+        client.cancel()
+        worker.join(15_000)
+        release.countDown()
+        assertFalse("the call outlived the cancel", worker.isAlive)
+        assertTrue(fail(outcome[0]!!) is BrainError.Cancelled)
     }
 
     @Test

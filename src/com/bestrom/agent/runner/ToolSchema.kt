@@ -221,6 +221,21 @@ object ToolSchema {
 
     private val BY_NAME: Map<String, Tool> = TOOLS.associateBy { it.name }
 
+    /**
+     * Tool name to bridge method, for everything but the terminal tool.
+     *
+     * The dispatcher reads this rather than keeping a second copy, so a tool
+     * added to the table above without a method - or without a branch in
+     * [bridgeParams] - fails a host test instead of dispatching an empty
+     * params object on the phone.
+     */
+    val BRIDGE: Map<String, String> =
+        TOOLS.filter { it.method.isNotEmpty() }.associate { it.name to it.method }
+
+    /** The tools whose result is worth a fresh look at the screen. */
+    val CHANGES_SCREEN: Set<String> =
+        setOf(TAP, LONG_PRESS, SWIPE, TYPE, KEY, LAUNCH_APP)
+
     fun tool(name: String): Tool? = BY_NAME[name]
 
     /** The names offered for a given vision setting, in schema order. */
