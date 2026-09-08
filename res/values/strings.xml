@@ -38,12 +38,19 @@
     <string name="pairing_cooldown">Pairing is refused for another %1$d s after three wrong codes.</string>
 
     <string name="can_do_header">What the agent can do</string>
-    <string name="can_do_body">Read what is on screen.\nTap, swipe and type.\nTake a screenshot.\nOpen apps.\nCall app functions Settings and other apps publish.</string>
+    <string name="can_do_body">Read what is on screen.\nTap, swipe and type.\nTake a screenshot.\nOpen apps.\nCall app functions Settings and other apps publish.\nCarry out a task you type, one step at a time, asking before each action.</string>
     <string name="cannot_do_header">What it cannot do</string>
-    <string name="cannot_do_body">Act while the phone is locked.\nAct while you are touching the screen.\nRead a password field, or type into one.\nDo anything after a restart.</string>
+    <string name="cannot_do_body">Act while the phone is locked.\nAct while you are touching the screen.\nRead a password field, or type into one.\nDo anything after a restart.\nStart a task on its own.\nAct on anything an app puts on the screen as if it were your instruction.</string>
 
     <string name="caveat_header">What it can still see</string>
     <string name="caveat_body">The contents of any app, including apps that block screenshots. Android hands the screen to an accessibility service whatever the app asks for.\nScreenshots are the one exception: the blocked areas come back blacked out.\nTo keep the agent out of an app entirely, exclude it below.</string>
+
+    <string name="ask_row">Ask the agent</string>
+    <string name="ask_row_summary">Type a task and watch it run, one step at a time</string>
+    <string name="brain_row">Brain</string>
+    <string name="brain_row_none">Not set up</string>
+    <string name="brain_row_summary">%1$s - %2$s</string>
+    <string name="caveat_endpoint">When you run a task, what is on screen is sent to the model endpoint you configured. BestROM operates no endpoint.</string>
 
     <string name="excluded_header">Excluded apps</string>
     <string name="excluded_none">None. The agent can read every app.</string>
@@ -81,6 +88,39 @@
     <string name="confirm_deny">Deny</string>
     <string name="confirm_allow_all">Allow all for this task</string>
     <string name="confirm_sensitive">This app handles payments or credentials.</string>
+
+    <string name="brain_title">Brain</string>
+    <string name="brain_intro">The thinking is done by a model you choose and pay for. BestROM runs no endpoint and receives none of it.</string>
+    <string name="brain_not_set">Not set</string>
+    <string name="brain_preset">Endpoint</string>
+    <string name="brain_base_url">Base URL</string>
+    <string name="brain_key">API key</string>
+    <string name="brain_key_set">Set</string>
+    <string name="brain_key_not_set">Not set</string>
+    <string name="brain_key_failed">The key could not be sealed. Set a screen lock and try again.</string>
+    <string name="brain_clear">Clear</string>
+    <string name="brain_workspace">Workspace id</string>
+    <string name="brain_model">Model</string>
+    <string name="brain_model_suggestions">Suggested: %1$s</string>
+    <string name="brain_screenshots">Send screenshots to the model</string>
+    <string name="brain_screenshots_on">On</string>
+    <string name="brain_screenshots_off">Off. Reading the screen as text costs far less.</string>
+    <string name="brain_screenshots_warning">A screenshot costs more than an entire ten step task. Only turn this on for a model that can see images.</string>
+    <string name="brain_confirm">Confirmation</string>
+    <string name="brain_confirm_each">Ask before each action</string>
+    <string name="brain_confirm_autonomous">Autonomous inside a task</string>
+    <string name="brain_confirm_autonomous_warning">The agent will tap, type, open apps and change settings without asking, for the whole task, driven by a model whose input includes text that apps and other people wrote. Payment and credential apps still ask every time, and the refused settings stay refused.</string>
+    <string name="brain_confirm_autonomous_line">Actions run without asking, inside a task.</string>
+    <string name="brain_steps">Step limit</string>
+    <string name="brain_tokens">Token limit</string>
+    <string name="brain_test">Test</string>
+    <string name="brain_test_running">Calling the endpoint…</string>
+    <string name="brain_test_ok">OK - %1$s</string>
+    <string name="brain_test_not_configured">Set a base URL and a model first.</string>
+    <string name="brain_save">Save</string>
+    <string name="brain_cancel">Cancel</string>
+    <string name="brain_turn_on">Turn on</string>
+    <string name="brain_footer">Everything the agent reads goes to the endpoint above, with your key. BestROM runs no endpoint of its own and receives none of it. A server on your own network is the option that sends nothing anywhere.</string>
 
     <string name="task_needs_a_goal">Type what the agent should do.</string>
     <string name="task_agent_off">Agent mode is off.</string>

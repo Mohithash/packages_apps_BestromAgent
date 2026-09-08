@@ -66,15 +66,43 @@
             android:permission="android.permission.WRITE_SECURE_SETTINGS"
             android:label="@string/agent_title" />
 
-        <!-- The task screen. Registered here so the Agent mode screen and the
-             notification can reach it; the assist filter that lets the platform
-             start it comes with the assistant entry. -->
+        <!-- The task screen, and the assistant entry.
+
+             exported="true" and the DEFAULT category are both load bearing:
+             AssistantRoleBehavior.getQualifyingPackagesInternal() queries with
+             MATCH_DEFAULT_ONLY and skips an activity whose exported flag is
+             false, so miss either and the app simply never appears under
+             Default apps > Digital assistant, which looks like a platform bug.
+
+             It carries NO android:permission. Copying the settings activity's
+             WRITE_SECURE_SETTINGS guard here happens to work today, because
+             SystemUI holds that permission, but it would make the whole
+             gesture depend on a coincidence.
+
+             Anything on the device can send ACTION_ASSIST, so the activity
+             reads none of what it is handed: no extras, no data, no clipboard.
+             A task only ever starts from text typed into the field. -->
         <activity
             android:name=".ui.AgentTaskActivity"
             android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:launchMode="singleTask"
             android:label="@string/agent_task_title"
+            android:theme="@android:style/Theme.DeviceDefault.Settings">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Where the API key is typed. Not exported: an activity another app
+             can start is an activity another app can put a window over. -->
+        <activity
+            android:name=".ui.BrainSettingsActivity"
+            android:enabled="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:label="@string/brain_title"
             android:theme="@android:style/Theme.DeviceDefault.Settings" />
 
         <service

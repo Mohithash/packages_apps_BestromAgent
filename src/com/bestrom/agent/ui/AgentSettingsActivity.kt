@@ -37,6 +37,7 @@ import com.bestrom.agent.AgentState
 import com.bestrom.agent.Denylist
 import com.bestrom.agent.R
 import com.bestrom.agent.audit.AuditLog
+import com.bestrom.agent.brain.BrainPrefs
 import com.bestrom.agent.bridge.AgentBridgeService
 import com.bestrom.agent.toggle.AgentToggle
 import java.util.concurrent.Executors
@@ -67,6 +68,9 @@ class AgentSettingsActivity : Activity() {
     private lateinit var emptyLabel: TextView
     private lateinit var clearButton: Button
     private lateinit var excludedSummary: TextView
+    private lateinit var askRow: View
+    private lateinit var brainRow: View
+    private lateinit var brainSummary: TextView
 
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -102,6 +106,9 @@ class AgentSettingsActivity : Activity() {
         emptyLabel = findViewById(R.id.activity_empty)
         clearButton = findViewById(R.id.clear_log)
         excludedSummary = findViewById(R.id.excluded_summary)
+        askRow = findViewById(R.id.ask_row)
+        brainRow = findViewById(R.id.brain_row)
+        brainSummary = findViewById(R.id.brain_summary)
 
         val list: RecyclerView = findViewById(R.id.audit_list)
         list.layoutManager = LinearLayoutManager(this)
@@ -118,6 +125,16 @@ class AgentSettingsActivity : Activity() {
                     .setAction(AgentBridgeService.ACTION_NEW_CODE)
             )
             main.postDelayed({ render() }, 150)
+        }
+
+        // startActivityForResult, not startActivity: it is the only way the
+        // task screen can tell that the caller was this app, which is what
+        // lets it accept a prefilled goal from here and from nowhere else.
+        askRow.setOnClickListener {
+            startActivityForResult(Intent(this, AgentTaskActivity::class.java), 2)
+        }
+        brainRow.setOnClickListener {
+            startActivity(Intent(this, BrainSettingsActivity::class.java))
         }
 
         clearButton.setOnClickListener { confirmClear() }
@@ -278,6 +295,13 @@ class AgentSettingsActivity : Activity() {
         } else {
             pairingGroup.visibility = View.GONE
         }
+
+        askRow.isEnabled = on
+        askRow.alpha = if (on) 1.0f else 0.4f
+        val brain = BrainPrefs.read(this)
+        brainSummary.text =
+            if (!brain.configured()) getString(R.string.brain_row_none)
+            else getString(R.string.brain_row_summary, brain.preset.label, brain.model)
 
         val excluded = Denylist.read(this)
         excludedSummary.text =

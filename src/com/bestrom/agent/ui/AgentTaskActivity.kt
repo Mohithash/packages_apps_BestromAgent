@@ -175,7 +175,7 @@ class AgentTaskActivity : Activity() {
         }
         if (!config.configured()) {
             showOff(R.string.task_no_brain_message, R.string.task_no_brain_button) {
-                startActivity(Intent(this, AgentSettingsActivity::class.java))
+                startActivity(Intent(this, BrainSettingsActivity::class.java))
             }
             return
         }
