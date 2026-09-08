@@ -46,6 +46,7 @@ class AgentAccessibilityService : AccessibilityService() {
 
     private val lock = Any()
     private var treeId: String? = null
+    private var treePackage: String? = null
     private var nodes: List<AccessibilityNodeInfo> = emptyList()
 
     override fun onServiceConnected() {
@@ -68,6 +69,17 @@ class AgentAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_VIEW_CLICKED,
             AccessibilityEvent.TYPE_GESTURE_DETECTION_START ->
                 AgentState.lastTouchMs.set(SystemClock.uptimeMillis())
+
+            // A node id addresses a node in the tree that was walked. Once the
+            // window has changed under it the ids mean nothing, so the tree is
+            // dropped here and the next node-addressed action gets STALE_TREE
+            // instead of landing on whatever now occupies that slot.
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> forgetTree()
+
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                val pkg = event.packageName?.toString()
+                if (pkg != null && pkg != snapshotPackage()) forgetTree()
+            }
         }
     }
 
@@ -135,6 +147,7 @@ class AgentAccessibilityService : AccessibilityService() {
 
         synchronized(lock) {
             treeId = id
+            treePackage = root.packageName?.toString()
             nodes = collected.nodes
         }
         return TreeSerializer.Snapshot(id, json, collected.nodes)
@@ -142,6 +155,9 @@ class AgentAccessibilityService : AccessibilityService() {
 
     /** The id of the most recent tree, or null when none has been taken. */
     fun currentTreeId(): String? = synchronized(lock) { treeId }
+
+    /** The package the most recent tree was walked from, or null. */
+    fun snapshotPackage(): String? = synchronized(lock) { treePackage }
 
     /** A node from the most recent tree; null when the id is stale or unknown. */
     fun nodeAt(requestedTreeId: String, nodeId: Int): AccessibilityNodeInfo? =
@@ -159,6 +175,7 @@ class AgentAccessibilityService : AccessibilityService() {
     private fun forgetTree() {
         synchronized(lock) {
             treeId = null
+            treePackage = null
             nodes = emptyList()
         }
     }

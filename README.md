@@ -20,6 +20,11 @@ feature is gated on the key rotation, not on this code.
 * Not resident. Both services ship `android:enabled="false"`, there is no
   receiver, job, provider or notification listener, and Agent mode does not
   survive a reboot. With the switch off the app is an APK on disk.
+* Not a confused deputy for `app.launch`. `Intent.parseUri` also accepts
+  extras, categories and flags; only the action, data, component and package
+  survive, the flags start at zero, and `FLAG_ACTIVITY_NEW_TASK` is the only
+  one added. The screen itself is behind `WRITE_SECURE_SETTINGS` and its root
+  view sets `filterTouchesWhenObscured`, so the switch cannot be tapjacked.
 
 ## Turning it on
 
@@ -66,7 +71,7 @@ batches, no notifications. Requests are capped at 1 MiB, responses at 8 MiB.
 | `ui.type` | session | yes | never echoes the text, refuses password fields |
 | `ui.key` | session | yes | back, home, recents, notifications, quick_settings, lock_screen, power_dialog, dismiss_notification_shade |
 | `ui.screenshot` | session | no | PNG, base64; secure areas are blacked out, not refused |
-| `app.launch` | session | yes | package, component or intent_uri, exactly one |
+| `app.launch` | session | yes | package, component or intent_uri, exactly one; rebuilt, rate limited |
 | `app.list` | session | no | |
 | `log.list` | session | no | the audit log |
 | `log.clear` | session | yes | all or nothing |

@@ -46,20 +46,21 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault.Settings">
 
-        <!-- No MAIN/LAUNCHER filter: Settings is the only door. Exported so the
-             Settings preference intent can reach it; it shows state and needs a
-             user tap for anything to happen. -->
+        <!-- No MAIN/LAUNCHER filter and no intent-filter at all: the Powerhub
+             preference names this component explicitly, so nothing needs one.
+             Exported, because a component in another app cannot be started
+             otherwise, but behind WRITE_SECURE_SETTINGS - Settings holds it,
+             an installed app does not. The switch on this screen enables a
+             service that reads the screen and taps it, which is exactly the
+             tap an overlay would want to steal, so the root view also sets
+             filterTouchesWhenObscured. -->
         <activity
             android:name=".ui.AgentSettingsActivity"
             android:enabled="true"
             android:exported="true"
             android:launchMode="singleTop"
-            android:label="@string/agent_title">
-            <intent-filter>
-                <action android:name="com.bestrom.agent.action.SETTINGS" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
+            android:permission="android.permission.WRITE_SECURE_SETTINGS"
+            android:label="@string/agent_title" />
 
         <service
             android:name=".bridge.AgentBridgeService"

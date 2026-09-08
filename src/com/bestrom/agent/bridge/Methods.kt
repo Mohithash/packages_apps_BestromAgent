@@ -151,7 +151,7 @@ object Methods {
                 { it.optString("name") }, ::uiKey),
             Spec("ui.screenshot", AuthLevel.SESSION, false, true, false, false, true,
                 NO_TARGET, ::uiScreenshot),
-            Spec("app.launch", AuthLevel.SESSION, true, true, true, false, false,
+            Spec("app.launch", AuthLevel.SESSION, true, true, true, true, false,
                 { it.optString("package", it.optString("component")) }, ::appLaunch),
             Spec("app.list", AuthLevel.SESSION, false, false, false, false, false,
                 NO_TARGET, ::appList),
@@ -750,7 +750,14 @@ object Methods {
                     "intent_uri may not carry a uri grant or a selector",
                 )
             }
-            intent = parsed
+            // Rebuilt rather than filtered. parseUri also accepts extras,
+            // categories and flags, and this Intent is dispatched by a
+            // platform-signed privileged app, so only the four fields that
+            // name a destination survive and the flags start at zero.
+            intent = Intent(parsed.action ?: Intent.ACTION_MAIN)
+            intent.data = parsed.data
+            intent.component = parsed.component
+            intent.`package` = parsed.`package`
         }
 
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
