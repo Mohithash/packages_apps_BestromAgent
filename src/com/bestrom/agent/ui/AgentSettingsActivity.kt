@@ -26,6 +26,7 @@ import android.os.Looper
 import android.view.View
 import android.widget.Button
 import android.widget.CompoundButton
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
@@ -33,6 +34,7 @@ import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bestrom.agent.AgentState
+import com.bestrom.agent.Denylist
 import com.bestrom.agent.R
 import com.bestrom.agent.audit.AuditLog
 import com.bestrom.agent.bridge.AgentBridgeService
@@ -61,6 +63,7 @@ class AgentSettingsActivity : Activity() {
     private lateinit var pairingCode: TextView
     private lateinit var emptyLabel: TextView
     private lateinit var clearButton: Button
+    private lateinit var excludedSummary: TextView
 
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -92,6 +95,7 @@ class AgentSettingsActivity : Activity() {
         pairingCode = findViewById(R.id.pairing_code)
         emptyLabel = findViewById(R.id.activity_empty)
         clearButton = findViewById(R.id.clear_log)
+        excludedSummary = findViewById(R.id.excluded_summary)
 
         val list: RecyclerView = findViewById(R.id.audit_list)
         list.layoutManager = LinearLayoutManager(this)
@@ -111,6 +115,7 @@ class AgentSettingsActivity : Activity() {
         }
 
         clearButton.setOnClickListener { confirmClear() }
+        findViewById<Button>(R.id.excluded_edit).setOnClickListener { editExcluded() }
     }
 
     override fun onResume() {
@@ -196,6 +201,33 @@ class AgentSettingsActivity : Activity() {
             .show()
     }
 
+    /**
+     * The excluded package list, edited as plain text: one package name per
+     * line. It is short by design and nothing else on the phone writes it.
+     */
+    private fun editExcluded() {
+        val field = EditText(this)
+        field.setText(Denylist.read(this).joinToString("\n"))
+        field.setSingleLine(false)
+        field.setHint("com.example.app")
+        val padding = (resources.displayMetrics.density * 24).toInt()
+        val frame = LinearLayout(this)
+        frame.orientation = LinearLayout.VERTICAL
+        frame.setPadding(padding, padding / 2, padding, 0)
+        frame.addView(field)
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.excluded_header)
+            .setMessage(R.string.excluded_dialog_message)
+            .setView(frame)
+            .setNegativeButton(R.string.excluded_dialog_cancel, null)
+            .setPositiveButton(R.string.excluded_dialog_save) { _, _ ->
+                Denylist.write(this, field.text.toString().split('\n'))
+                render()
+            }
+            .show()
+    }
+
     private fun render() {
         val on = AgentState.bridgeLive.get()
         if (masterSwitch.isChecked != on && !busy) masterSwitch.isChecked = on
@@ -217,6 +249,11 @@ class AgentSettingsActivity : Activity() {
         } else {
             pairingGroup.visibility = View.GONE
         }
+
+        val excluded = Denylist.read(this)
+        excludedSummary.text =
+            if (excluded.isEmpty()) getString(R.string.excluded_none)
+            else getString(R.string.excluded_count, excluded.size) + "  " + excluded.joinToString(", ")
 
         val entries = audit.list(AuditLog.CAPACITY)
         adapter.submit(entries)

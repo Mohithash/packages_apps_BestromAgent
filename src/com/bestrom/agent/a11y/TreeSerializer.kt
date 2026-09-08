@@ -160,9 +160,11 @@ object TreeSerializer {
             o.put("id", i)
             o.put("cls", f.cls)
             o.put("pkg", f.pkg)
-            // A password field never carries its text out of the phone.
+            // A password field never carries its text out of the phone. The
+            // content description is guarded too: a custom PIN pad often puts
+            // the entered value there.
             if (!f.password && !f.text.isNullOrEmpty()) o.put("text", f.text)
-            if (!f.desc.isNullOrEmpty()) o.put("desc", f.desc)
+            if (!f.password && !f.desc.isNullOrEmpty()) o.put("desc", f.desc)
             if (!f.password && !f.hint.isNullOrEmpty()) o.put("hint", f.hint)
             if (!f.resId.isNullOrEmpty()) o.put("res_id", f.resId)
             val b = JSONArray()

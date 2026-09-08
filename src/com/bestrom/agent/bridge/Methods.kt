@@ -17,6 +17,7 @@
 
 package com.bestrom.agent.bridge
 
+import android.accessibilityservice.AccessibilityService
 import android.app.KeyguardManager
 import android.app.appfunctions.AppFunctionException
 import android.content.ComponentName
@@ -28,6 +29,7 @@ import android.os.Build
 import android.os.SystemProperties
 import android.util.Base64
 import com.bestrom.agent.AgentState
+import com.bestrom.agent.Denylist
 import com.bestrom.agent.a11y.Actions
 import com.bestrom.agent.a11y.TreeSerializer
 import com.bestrom.agent.audit.AuditLog
@@ -260,9 +262,32 @@ object Methods {
         return response
     }
 
+    /**
+     * True whenever the keyguard is up.
+     *
+     * isDeviceLocked alone is false on a swipe-only lock screen and false while
+     * a trust agent holds the device trusted, and in both of those the lock
+     * screen is still on top with its notifications on it. isKeyguardLocked is
+     * the property the guardrail actually wants, so both are checked.
+     */
     private fun deviceLocked(host: Host): Boolean {
         val keyguard = host.context.getSystemService(KeyguardManager::class.java) ?: return false
-        return keyguard.isDeviceLocked
+        return keyguard.isDeviceLocked || keyguard.isKeyguardLocked
+    }
+
+    /**
+     * Refuses a package the maintainer excluded on the Agent mode screen.
+     *
+     * This is not a platform control. An accessibility service is handed the
+     * tree of every app, so an exclusion has to be enforced here or not at all.
+     */
+    private fun refuseDenied(host: Host, packageName: String?) {
+        if (!Denylist.blocks(host.context, packageName)) return
+        throw JsonRpc.RpcException(
+            JsonRpc.SECURE_WINDOW,
+            "that package is excluded from Agent mode",
+            JSONObject().put("reason", "denied_package").put("package", packageName),
+        )
     }
 
     private fun pointTarget(params: JSONObject): String =
@@ -425,11 +450,13 @@ object Methods {
         val maxDepth = params.optInt("max_depth", TreeSerializer.DEFAULT_MAX_DEPTH).coerceIn(1, 100)
         val maxNodes = params.optInt("max_nodes", TreeSerializer.DEFAULT_MAX_NODES).coerceIn(1, 5000)
         val includeInvisible = params.optBoolean("include_invisible", false)
+        refuseDenied(host, service.activeWindowPackage())
         val snapshot =
             service.snapshot(maxDepth, maxNodes, includeInvisible)
                 ?: throw JsonRpc.RpcException(
-                    JsonRpc.SECURE_WINDOW,
-                    "the active window is not readable",
+                    JsonRpc.AGENT_DISABLED,
+                    "there is no active window to read",
+                    JSONObject().put("reason", "no_active_window"),
                 )
         return snapshot.json
     }
@@ -470,6 +497,7 @@ object Methods {
             AgentState.a11y ?: throw JsonRpc.RpcException(JsonRpc.AGENT_DISABLED, "not connected")
         requirePointOrNode(params)
         val node = resolveNode(params)
+        refuseDenied(host, node?.packageName?.toString() ?: service.activeWindowPackage())
         if (node != null) {
             if (Actions.clickNode(node)) {
                 return JSONObject()
@@ -596,10 +624,21 @@ object Methods {
         val service =
             AgentState.a11y ?: throw JsonRpc.RpcException(JsonRpc.AGENT_DISABLED, "not connected")
         val encoding = params.optString("encoding", "base64")
+        refuseDenied(host, service.activeWindowPackage())
         val outcome = Actions.screenshot(service, host.callbackExecutor)
         if (outcome.png == null) {
+            // The platform redacts secure layers for a service that is not an
+            // accessibility tool, so a secure screen normally comes back with
+            // those areas blacked out rather than refused. If it ever does
+            // refuse one, that is the code that says so and it keeps -32012.
+            val code =
+                if (outcome.errorCode == AccessibilityService.ERROR_TAKE_SCREENSHOT_SECURE_WINDOW) {
+                    JsonRpc.SECURE_WINDOW
+                } else {
+                    JsonRpc.SCREENSHOT_UNAVAILABLE
+                }
             throw JsonRpc.RpcException(
-                JsonRpc.SCREENSHOT_UNAVAILABLE,
+                code,
                 "the platform refused the screenshot",
                 JSONObject().put("reason", outcome.errorCode),
             )

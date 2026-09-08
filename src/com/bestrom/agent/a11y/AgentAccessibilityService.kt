@@ -94,11 +94,15 @@ class AgentAccessibilityService : AccessibilityService() {
     /**
      * The root of the active window, or null.
      *
-     * Null is not "empty": a FLAG_SECURE window is never handed to an
-     * accessibility service, so the caller reports SECURE_WINDOW rather than an
-     * empty tree.
+     * Null means there is no active window right now - between two activities,
+     * or while the window is being torn down. It does not mean the window was
+     * withheld: FLAG_SECURE governs screen capture only, and the tree of an app
+     * that blocks screenshots is handed over like any other.
      */
     fun activeRoot(): AccessibilityNodeInfo? = rootInActiveWindow
+
+    /** The package that owns the active window, or null when there is none. */
+    fun activeWindowPackage(): String? = rootInActiveWindow?.packageName?.toString()
 
     /** The display bounds, used as the coordinate space for gestures. */
     fun displayBounds(): Rect {

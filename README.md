@@ -60,13 +60,13 @@ batches, no notifications. Requests are capped at 1 MiB, responses at 8 MiB.
 | `agent.auth` | none | no | re-authenticate with the token already held |
 | `functions.list` | session | no | `searchAppFunctions`, AppSearch as the fallback |
 | `functions.execute` | session | yes | a `PendingIntent` in the extras is reported, never launched |
-| `ui.tree` | session | no | active window only, compact JSON, password nodes without text |
+| `ui.tree` | session | no | active window only, compact JSON, password nodes without text, desc or hint |
 | `ui.tap` | session | yes | node action first, gesture fallback |
 | `ui.long_press` | session | yes | |
 | `ui.swipe` | session | yes | display pixels |
 | `ui.type` | session | yes | never echoes the text, refuses password fields |
 | `ui.key` | session | yes | back, home, recents, notifications, quick_settings, lock_screen, power_dialog, dismiss_notification_shade |
-| `ui.screenshot` | session | no | PNG, base64; the platform's own interval limit applies |
+| `ui.screenshot` | session | no | PNG, base64; secure areas are blacked out, not refused |
 | `app.launch` | session | yes | package, component or intent_uri, exactly one |
 | `app.list` | session | no | |
 | `log.list` | session | no | the audit log |
@@ -91,11 +91,34 @@ Defended, independently of the signing key:
   minute idle timeout.
 * A confirmation floor the phone enforces itself, so a misbehaving client cannot
   act by accident.
-* Hard stops the platform gives for free: a locked device, `FLAG_SECURE`
-  surfaces and password fields are refused with distinct error codes, so
-  "blocked" is never mistaken for "empty".
+* Hard stops: the keyguard being up at all - `isDeviceLocked` **or**
+  `isKeyguardLocked`, so a swipe-only lock and Smart Lock are both covered - and
+  password fields, which are refused with a distinct error code so "blocked" is
+  never mistaken for "empty".
 * An audit log the model cannot rewrite selectively: append only, bounded at 500
   entries, values never recorded, readable in Settings, clearable only wholesale.
+
+Not defended, and said plainly because the opposite was claimed here before:
+
+* **`FLAG_SECURE` does not hide anything from `ui.tree`.** That flag governs
+  screen capture, not accessibility; nothing in the platform's window or node
+  path tests it. The screen tree of any app, including an app that blocks
+  screenshots, is readable. There is no error code for it because nothing is
+  refused.
+* **`ui.screenshot` of a secure screen is not refused either** - it comes back
+  with those areas blacked out by the platform. That redaction is why
+  `android:isAccessibilityTool` is absent from the service xml: with it, and as
+  a system app, this service would qualify for `canCaptureSecureLayers()` and
+  the platform would hand it those layers in the clear. `-32012` is kept for the
+  `ERROR_TAKE_SCREENSHOT_SECURE_WINDOW` case in the unlikely event the platform
+  does produce it; every other screenshot failure is `-32013`.
+* Password fields are the one real exclusion in the tree: `text`, `desc` and
+  `hint` are omitted for a node whose `isPassword()` is true, and `ui.type`
+  refuses one outright.
+* For anything else, the exclusion has to be the maintainer's own: **Excluded
+  apps** on the Agent mode screen is a package list, empty by default, and
+  `ui.tree`, `ui.screenshot` and `ui.tap` refuse with `-32012`
+  (`data.reason = "denied_package"`) while an excluded package is on screen.
 
 Not defended: indirect prompt injection. Everything `ui.tree` and `ui.screenshot`
 return is text an attacker can put on the screen. Phase 1 keeps that risk on the

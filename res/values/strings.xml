@@ -36,7 +36,18 @@
     <string name="can_do_header">What the agent can do</string>
     <string name="can_do_body">Read what is on screen.\nTap, swipe and type.\nTake a screenshot.\nOpen apps.\nCall app functions Settings and other apps publish.</string>
     <string name="cannot_do_header">What it cannot do</string>
-    <string name="cannot_do_body">Act while the phone is locked.\nAct while you are touching the screen.\nRead password fields or apps that block screenshots.\nDo anything after a restart.</string>
+    <string name="cannot_do_body">Act while the phone is locked.\nAct while you are touching the screen.\nRead a password field, or type into one.\nDo anything after a restart.</string>
+
+    <string name="caveat_header">What it can still see</string>
+    <string name="caveat_body">The contents of any app, including apps that block screenshots. Android hands the screen to an accessibility service whatever the app asks for.\nScreenshots are the one exception: the blocked areas come back blacked out.\nTo keep the agent out of an app entirely, exclude it below.</string>
+
+    <string name="excluded_header">Excluded apps</string>
+    <string name="excluded_none">None. The agent can read every app.</string>
+    <string name="excluded_count">%1$d excluded</string>
+    <string name="excluded_edit">Edit</string>
+    <string name="excluded_dialog_message">One package name per line. Reading, tapping and screenshotting are refused while any of these is on screen.</string>
+    <string name="excluded_dialog_save">Save</string>
+    <string name="excluded_dialog_cancel">Cancel</string>
 
     <string name="activity_header">Activity</string>
     <string name="activity_empty">No requests yet.</string>

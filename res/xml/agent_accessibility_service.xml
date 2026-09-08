@@ -14,6 +14,15 @@
      See the License for the specific language governing permissions and
      limitations under the License.
 -->
+<!--
+     android:isAccessibilityTool is deliberately absent. The platform grants
+     canCaptureSecureLayers() only to a service that sets it AND ships as a
+     system app - both of which this app would otherwise satisfy - and such a
+     service is handed secure layers unredacted by takeScreenshot(). Without the
+     flag the platform picks SECURE_CONTENT_POLICY_REDACT instead, so a screen
+     that blocks screenshots comes back with those areas blacked out. That is
+     the behaviour the settings screen describes, so the flag stays off.
+-->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked|typeTouchInteractionStart|typeTouchInteractionEnd"
     android:accessibilityFeedbackType="feedbackGeneric"
@@ -21,7 +30,6 @@
     android:canPerformGestures="true"
     android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
-    android:isAccessibilityTool="true"
     android:notificationTimeout="100"
     android:description="@string/a11y_description"
     android:summary="@string/a11y_summary" />
