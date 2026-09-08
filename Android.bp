@@ -1,0 +1,83 @@
+//
+// Copyright (C) 2026 The BestROM Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+android_app {
+    name: "BestromAgent",
+
+    srcs: ["src/**/*.kt"],
+    resource_dirs: ["res"],
+    manifest: "AndroidManifest.xml",
+
+    // platform_apis, not system_current: the AppFunctions entry points are
+    // @FlaggedApi and the accessibility screenshot path wants the platform
+    // surface. Same shape as Launcher3QuickStep and TvSystemUI.
+    platform_apis: true,
+    min_sdk_version: "current",
+    target_sdk_version: "current",
+
+    certificate: "platform",
+    privileged: true,
+    system_ext_specific: true,
+
+    static_libs: [
+        "androidx.core_core-ktx",
+        "androidx.recyclerview_recyclerview",
+    ],
+
+    // R8 off for the same reason Freezer keeps it off: the ROM build is the
+    // only place it runs, so a shrinker surprise there costs more than the
+    // few hundred KB it saves.
+    optimize: {
+        enabled: false,
+    },
+
+    required: ["privapp_whitelist_com.bestrom.agent"],
+}
+
+prebuilt_etc {
+    name: "privapp_whitelist_com.bestrom.agent",
+    system_ext_specific: true,
+    sub_dir: "permissions",
+    src: "rom/privapp-permissions-com.bestrom.agent.xml",
+    filename_from_src: true,
+}
+
+// The protocol pieces that hold no Android state, compiled for the host so the
+// framing, the pairing code and the rate limiter can be tested without a device.
+java_library_host {
+    name: "BestromAgent-protocol",
+
+    srcs: [
+        "src/com/bestrom/agent/bridge/Framing.kt",
+        "src/com/bestrom/agent/bridge/Auth.kt",
+        "src/com/bestrom/agent/bridge/RateLimiter.kt",
+    ],
+}
+
+java_test_host {
+    name: "BestromAgentTests",
+
+    srcs: ["tests/src/**/*.kt"],
+
+    static_libs: [
+        "BestromAgent-protocol",
+        "junit",
+    ],
+
+    test_options: {
+        unit_test: true,
+    },
+}

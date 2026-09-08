@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 The BestROM Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+-->
+<!--
+  BestromAgent - Agent mode.
+
+  Both services ship android:enabled="false": with the switch off,
+  AccessibilityManagerService never scans this app and nothing binds it. The
+  settings activity is enabled because it is the door - an activity nobody
+  starts costs nothing, holds no binding and starts no process. There is
+  deliberately no <receiver>, no BOOT_COMPLETED, no JobService, no
+  NotificationListenerService and no <provider> anywhere in this file, and there
+  is no android.permission.INTERNET: the bridge is a unix abstract socket
+  reached through adb forward.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.bestrom.agent">
+
+    <!-- privapp allowlist: rom/privapp-permissions-com.bestrom.agent.xml -->
+    <uses-permission android:name="android.permission.EXECUTE_APP_FUNCTIONS" />
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+
+    <!-- normal / signature, no allowlist entry -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.DeviceDefault.Settings">
+
+        <!-- No MAIN/LAUNCHER filter: Settings is the only door. Exported so the
+             Settings preference intent can reach it; it shows state and needs a
+             user tap for anything to happen. -->
+        <activity
+            android:name=".ui.AgentSettingsActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:label="@string/agent_title">
+            <intent-filter>
+                <action android:name="com.bestrom.agent.action.SETTINGS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".bridge.AgentBridgeService"
+            android:enabled="false"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local agent bridge, running only while Agent mode is on" />
+        </service>
+
+        <service
+            android:name=".a11y.AgentAccessibilityService"
+            android:enabled="false"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/agent_accessibility_service" />
+        </service>
+
+        <!--
+             androidx.recyclerview drags in profileinstaller, whose manifest adds a
+             ContentProvider that runs at process start and an exported receiver.
+             Both are stripped here so the merged manifest keeps its promise: no
+             provider and no receiver ship in this APK. tools:node is a merger
+             directive, not a component - the merged manifest has neither element.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            tools:node="remove" />
+
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            tools:node="remove" />
+
+    </application>
+</manifest>
