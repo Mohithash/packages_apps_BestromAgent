@@ -37,16 +37,31 @@ class SystemPromptTest {
             "com.android.alarm/createAlarm - Create an alarm - params: hour(int)",
         )
 
-    private fun build(
-        apps: List<String> = this.apps,
-        functions: List<String> = this.functions,
-    ): String = SystemPrompt.build("POCO F6, Android 17 (API 37), screen 1080x2400.", apps, functions)
+    private fun build(): String =
+        SystemPrompt.build("POCO F6, Android 17 (API 37), screen 1080x2400.")
 
     @Test
     fun theSameFactsInADifferentOrderGiveTheSameBytes() {
-        // A caching provider only caches a prefix that does not move.
-        assertEquals(build(), build(apps.reversed(), functions.reversed()))
-        assertEquals(build(), build(apps.shuffled(), functions.shuffled()))
+        // A caching provider only caches a prefix that does not move, and the
+        // two lists are sorted wherever they are built.
+        assertEquals(build(), build())
+        assertEquals(SystemPrompt.appList(apps), SystemPrompt.appList(apps.reversed()))
+        assertEquals(
+            SystemPrompt.functionList(functions),
+            SystemPrompt.functionList(functions.shuffled()),
+        )
+    }
+
+    @Test
+    fun theAppAndFunctionListsAreNotInTheSystemRole() {
+        // They are strings other apps chose for themselves. In the system
+        // prompt a label with a newline in it writes its own heading; in a
+        // user message wrapped as device output it is data.
+        val prompt = build()
+        assertFalse(prompt.contains("com.android.chrome"))
+        assertFalse(prompt.contains("createAlarm"))
+        assertFalse(prompt.contains("# Installed apps"))
+        assertFalse(prompt.contains("# App functions"))
     }
 
     @Test
@@ -122,19 +137,21 @@ class SystemPromptTest {
     }
 
     @Test
-    fun theDeviceAppAndFunctionSectionsAreAllThere() {
+    fun theDeviceSectionIsThereAndTheListsAreTheirOwnBlocks() {
         val prompt = build()
         assertTrue(prompt.contains("# This device\nPOCO F6, Android 17 (API 37), screen 1080x2400."))
-        assertTrue(prompt.contains("# Installed apps\ncom.android.chrome  Chrome"))
-        assertTrue(prompt.contains("# App functions\ncom.android.alarm/createAlarm"))
+        assertTrue(SystemPrompt.appList(apps).contains("com.android.chrome  Chrome"))
+        assertTrue(SystemPrompt.functionList(functions).contains("com.android.alarm/createAlarm"))
     }
 
     @Test
     fun anEmptyDeviceStillProducesAUsablePrompt() {
-        val prompt = build(emptyList(), emptyList())
-        assertTrue(prompt.contains("None were readable."))
-        assertTrue(prompt.contains("None. This device publishes no app functions."))
-        assertTrue(prompt.startsWith("You are BestROM Agent"))
+        assertEquals("None were readable.", SystemPrompt.appList(emptyList()))
+        assertEquals(
+            "None. This device publishes no app functions.",
+            SystemPrompt.functionList(emptyList()),
+        )
+        assertTrue(build().startsWith("You are BestROM Agent"))
     }
 
     @Test

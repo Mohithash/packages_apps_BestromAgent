@@ -141,12 +141,7 @@ class AgentRunner(
         policy = PolicyEngine(task.goal, apps, Denylist.read(context).toSet(), task.autonomous)
         val functions = functionCatalogue()
 
-        systemPrompt =
-            SystemPrompt.build(
-                deviceLine(),
-                apps.map { it.packageName + "  " + it.label },
-                FunctionCatalog.lines(functions ?: JSONObject()),
-            )
+        systemPrompt = SystemPrompt.build(deviceLine())
 
         host.audit.append(
             "agent.start",
@@ -161,7 +156,29 @@ class AgentRunner(
         notify(Mode.ACTING, task.goal.take(GOAL_IN_NOTIFICATION), 0)
 
         val screen = dispatch.readScreen()
+        // The app list and the function catalogue are strings other apps chose
+        // for themselves, so they arrive as device output rather than as part
+        // of the instructions.
         val opening = StringBuilder(task.goal)
+        opening
+            .append("\n\n")
+            .append(
+                InjectionFilter.envelope(
+                    "app.list",
+                    "",
+                    SystemPrompt.appList(apps.map { it.packageName + "  " + it.label }),
+                )
+            )
+            .append("\n\n")
+            .append(
+                InjectionFilter.envelope(
+                    "functions.list",
+                    "",
+                    SystemPrompt.functionList(
+                        FunctionCatalog.lines(functions ?: JSONObject())
+                    ),
+                )
+            )
         if (screen is ToolDispatch.Outcome.Ok) {
             val digest = dispatch.digest
             if (digest != null) {
@@ -231,7 +248,7 @@ class AgentRunner(
             out.add(
                 PolicyEngine.AppFacts(
                     pkg,
-                    InjectionFilter.sanitise(app.optString("label"), 64),
+                    InjectionFilter.oneLine(app.optString("label"), 64),
                     billing.contains(pkg),
                     hce.contains(pkg),
                 )

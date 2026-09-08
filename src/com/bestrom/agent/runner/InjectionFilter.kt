@@ -87,6 +87,20 @@ object InjectionFilter {
     }
 
     /**
+     * One string from the device, on one line.
+     *
+     * For the places where the text is put into a list whose structure is
+     * lines: an app label, a function name, a parameter name. sanitise keeps
+     * newlines because the screen digest is built out of them, and a name that
+     * carries one can add a line to a list it is only supposed to be an item
+     * of.
+     */
+    fun oneLine(text: String, max: Int = MAX_STRING): String =
+        sanitise(text, max).replace(WHITESPACE, " ").trim()
+
+    private val WHITESPACE = Regex("\\s+")
+
+    /**
      * Removes C0 and C1 controls, the zero-width characters and the bidi
      * overrides.
      *

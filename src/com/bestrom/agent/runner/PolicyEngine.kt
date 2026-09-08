@@ -121,6 +121,9 @@ class PolicyEngine(
         /** The parameter names a settings function uses to say what it changes. */
         val KEY_PARAMS: List<String> = listOf("key", "settingKey", "preferenceKey")
 
+        /** How long a one-word app label has to be before the goal can name it. */
+        const val MIN_LABEL_CHARS = 6
+
         /**
          * Packages that handle money or credentials.
          *
@@ -203,13 +206,25 @@ class PolicyEngine(
     val named: Set<String> =
         run {
             val goalTokens = tokens(goal)
-            apps.filter {
-                containsSequence(goalTokens, tokens(it.packageName)) ||
-                    (it.label.isNotEmpty() && containsSequence(goalTokens, tokens(it.label)))
-            }
-                .map { it.packageName }
-                .toSet()
+            apps.filter { namesApp(goalTokens, it) }.map { it.packageName }.toSet()
         }
+
+    /**
+     * Whether the goal names this app.
+     *
+     * The package name is the good half of this test: nobody else chooses it.
+     * A label is chosen by the app itself, so a one-word label short enough to
+     * be an ordinary word - "Pay", "Phone", "Card" - would make most goals
+     * name most apps. Two tokens, or one long one, is the floor.
+     */
+    private fun namesApp(goalTokens: List<String>, app: AppFacts): Boolean {
+        if (containsSequence(goalTokens, tokens(app.packageName))) return true
+        if (app.label.isEmpty()) return false
+        val labelTokens = tokens(app.label)
+        if (labelTokens.isEmpty()) return false
+        if (labelTokens.size < 2 && labelTokens[0].length < MIN_LABEL_CHARS) return false
+        return containsSequence(goalTokens, labelTokens)
+    }
 
     private fun matchesPrefix(packageName: String): Boolean =
         SENSITIVE_PREFIXES.any { packageName == it || packageName.startsWith(it) }

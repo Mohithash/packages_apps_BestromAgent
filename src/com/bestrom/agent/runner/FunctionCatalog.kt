@@ -91,14 +91,14 @@ object FunctionCatalog {
         // The client writes description as a plain string; a flattening that
         // left it as a single-element array is read the same way.
         val description = (unwrap(f.opt("description")) as? String)
-            ?.let { InjectionFilter.sanitise(it, 160) }
+            ?.let { InjectionFilter.oneLine(it, 160) }
             .orEmpty()
         if (description.isNotEmpty()) {
             sb.append(" - ").append(description)
         } else {
             val schema = f.optJSONObject("schema")
             val name = (unwrap(schema?.opt("name")) as? String).orEmpty()
-            if (name.isNotEmpty()) sb.append(" - ").append(InjectionFilter.sanitise(name, 64))
+            if (name.isNotEmpty()) sb.append(" - ").append(InjectionFilter.oneLine(name, 64))
         }
 
         sb.append(" - params: ").append(params(f.optJSONArray("parameters")))
@@ -137,7 +137,9 @@ object FunctionCatalog {
             if (!p.has(key) || p.isNull(key)) continue
             val value = unwrap(p.opt(key))
             if (value is String && value.isNotEmpty()) {
-                return InjectionFilter.sanitise(value, 64)
+                // One line: the catalogue is a list whose structure is lines,
+                // and every string in it comes out of another app's metadata.
+                return InjectionFilter.oneLine(value, 64)
             }
         }
         return null
