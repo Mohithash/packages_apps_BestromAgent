@@ -22,12 +22,17 @@
      flag the platform picks SECURE_CONTENT_POLICY_REDACT instead, so a screen
      that blocks screenshots comes back with those areas blacked out. That is
      the behaviour the settings screen describes, so the flag stays off.
+
+     canPerformGestures stays false: true arms AccessibilityInputFilter for the
+     whole device (FLAG_FEATURE_INJECT_MOTION_EVENTS), which breaks LeanType /
+     Gboard glide and swipe-to-reply while Agent mode is on. Agent taps use
+     node actions; coordinate gestures need a non-filter inject path.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked|typeTouchInteractionStart|typeTouchInteractionEnd"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
-    android:canPerformGestures="true"
+    android:canPerformGestures="false"
     android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
     android:notificationTimeout="100"
