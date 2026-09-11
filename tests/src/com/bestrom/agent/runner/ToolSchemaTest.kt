@@ -55,8 +55,8 @@ class ToolSchemaTest {
     fun screenshotIsTheOnlyDifferenceVisionMakes() {
         val without = names(ToolSchema.tools(false))
         val with = names(ToolSchema.tools(true))
-        assertEquals(10, without.size)
-        assertEquals(11, with.size)
+        assertEquals(36, without.size)
+        assertEquals(37, with.size)
         assertEquals(listOf(ToolSchema.SCREENSHOT), with - without.toSet())
         assertFalse(without.contains(ToolSchema.SCREENSHOT))
     }
@@ -96,9 +96,35 @@ class ToolSchemaTest {
                 "type",
                 "key",
                 "launch_app",
+                "list_apps",
                 "list_functions",
                 "call_function",
                 "screenshot",
+                "wait",
+                "schedule_reminder",
+                "schedule_task",
+                "list_reminders",
+                "cancel_reminder",
+                "log_tail",
+                "log_grep",
+                "crash_scan",
+                "measure_idle_drain",
+                "batterystats_snippet",
+                "start_job",
+                "stop_job",
+                "list_jobs",
+                "save_macro",
+                "delete_macro",
+                "list_macros",
+                "run_macro",
+                "list_playbooks",
+                "run_playbook",
+                "describe_alert_options",
+                "offer_choices",
+                "create_miniapp",
+                "list_miniapps",
+                "delete_miniapp",
+                "open_miniapp",
                 "done",
             ),
             names(ToolSchema.tools(true)),
@@ -109,13 +135,44 @@ class ToolSchemaTest {
     fun everyToolInTheSchemaHasABridgeMethodOrIsTerminal() {
         // The dispatcher reads ToolSchema.BRIDGE, so this is the mapping that
         // actually runs and not a description of it.
+        val local =
+            setOf(
+                ToolSchema.DONE,
+                ToolSchema.WAIT,
+                ToolSchema.SCHEDULE_REMINDER,
+                ToolSchema.SCHEDULE_TASK,
+                ToolSchema.LIST_REMINDERS,
+                ToolSchema.CANCEL_REMINDER,
+                ToolSchema.LOG_TAIL,
+                ToolSchema.LOG_GREP,
+                ToolSchema.CRASH_SCAN,
+                ToolSchema.MEASURE_IDLE_DRAIN,
+                ToolSchema.BATTERYSTATS_SNIPPET,
+                ToolSchema.START_JOB,
+                ToolSchema.STOP_JOB,
+                ToolSchema.LIST_JOBS,
+                ToolSchema.SAVE_MACRO,
+                ToolSchema.DELETE_MACRO,
+                ToolSchema.LIST_MACROS,
+                ToolSchema.RUN_MACRO,
+                ToolSchema.LIST_PLAYBOOKS,
+                ToolSchema.RUN_PLAYBOOK,
+                ToolSchema.DESCRIBE_ALERT_OPTIONS,
+                ToolSchema.OFFER_CHOICES,
+                ToolSchema.CREATE_MINIAPP,
+                ToolSchema.LIST_MINIAPPS,
+                ToolSchema.DELETE_MINIAPP,
+                ToolSchema.OPEN_MINIAPP,
+            )
         assertEquals(
-            ToolSchema.TOOLS.map { it.name }.filter { it != ToolSchema.DONE }.toSet(),
+            ToolSchema.TOOLS.map { it.name }.filter { it !in local }.toSet(),
             ToolSchema.BRIDGE.keys,
         )
-        assertEquals("", ToolSchema.tool(ToolSchema.DONE)!!.method)
+        for (name in local) {
+            assertEquals(name, "", ToolSchema.tool(name)!!.method)
+        }
         for (tool in ToolSchema.TOOLS) {
-            if (tool.name == ToolSchema.DONE) continue
+            if (tool.name in local) continue
             val method = ToolSchema.BRIDGE[tool.name]!!
             assertEquals(tool.name, tool.method, method)
             assertTrue(tool.name, method.startsWith("ui.") ||
@@ -164,7 +221,7 @@ class ToolSchemaTest {
         // presets. Measured, not guessed.
         assertTrue(
             "tools(false) is " + ToolSchema.tools(false).toString().length,
-            ToolSchema.tools(false).toString().length < 3200,
+            ToolSchema.tools(false).toString().length < 14000,
         )
     }
 
@@ -178,10 +235,54 @@ class ToolSchemaTest {
             ToolSchema.TYPE -> valid(tool.name, """{"text":"hello"}""")
             ToolSchema.KEY -> valid(tool.name, """{"name":"back"}""")
             ToolSchema.LAUNCH_APP -> valid(tool.name, """{"package":"com.android.settings"}""")
+            ToolSchema.LIST_APPS -> valid(tool.name, "{}")
             ToolSchema.LIST_FUNCTIONS -> valid(tool.name, "{}")
             ToolSchema.CALL_FUNCTION ->
                 valid(tool.name, """{"package":"com.android.settings","function":"f"}""")
             ToolSchema.SCREENSHOT -> valid(tool.name, "{}", vision = true)
+            ToolSchema.WAIT -> valid(tool.name, """{"ms":200}""")
+            ToolSchema.SCHEDULE_REMINDER ->
+                valid(tool.name, """{"message":"Drink water","in_minutes":15}""")
+            ToolSchema.SCHEDULE_TASK ->
+                valid(tool.name, """{"goal":"Turn on Wi-Fi","in_minutes":30}""")
+            ToolSchema.LIST_REMINDERS -> valid(tool.name, "{}")
+            ToolSchema.CANCEL_REMINDER -> valid(tool.name, """{"id":"abcd1234"}""")
+            ToolSchema.LOG_TAIL -> valid(tool.name, """{"lines":80}""")
+            ToolSchema.LOG_GREP -> valid(tool.name, """{"pattern":"FATAL","lines":40}""")
+            ToolSchema.CRASH_SCAN -> valid(tool.name, """{"max":8}""")
+            ToolSchema.MEASURE_IDLE_DRAIN -> valid(tool.name, "{}")
+            ToolSchema.BATTERYSTATS_SNIPPET ->
+                valid(tool.name, """{"mode":"full","focus":"summary"}""")
+            ToolSchema.START_JOB ->
+                valid(tool.name, """{"kind":"idle_drain","interval_minutes":30}""")
+            ToolSchema.STOP_JOB -> valid(tool.name, """{"id":"abcd1234"}""")
+            ToolSchema.LIST_JOBS -> valid(tool.name, "{}")
+            ToolSchema.SAVE_MACRO ->
+                valid(
+                    tool.name,
+                    """{"name":"Night drain","trigger":"interval","interval_minutes":60,"steps":"[{\"tool\":\"measure_idle_drain\"}]"}""",
+                )
+            ToolSchema.DELETE_MACRO -> valid(tool.name, """{"id":"abcd1234"}""")
+            ToolSchema.LIST_MACROS -> valid(tool.name, "{}")
+            ToolSchema.RUN_MACRO -> valid(tool.name, """{"id":"abcd1234"}""")
+            ToolSchema.LIST_PLAYBOOKS -> valid(tool.name, "{}")
+            ToolSchema.RUN_PLAYBOOK ->
+                valid(tool.name, """{"id":"order_food","detail":"biryani"}""")
+            ToolSchema.DESCRIBE_ALERT_OPTIONS -> valid(tool.name, "{}")
+            ToolSchema.OFFER_CHOICES ->
+                valid(
+                    tool.name,
+                    """{"prompt":"How to alert?","options":"[\"notification\",\"toast\",\"dialog\"]"}""",
+                )
+            ToolSchema.CREATE_MINIAPP ->
+                valid(
+                    tool.name,
+                    """{"name":"Pushups","kind":"counter","unit":"reps"}""",
+                )
+            ToolSchema.LIST_MINIAPPS -> valid(tool.name, "{}")
+            ToolSchema.DELETE_MINIAPP -> valid(tool.name, """{"id":"abcd1234"}""")
+            ToolSchema.OPEN_MINIAPP -> valid(tool.name, """{"id":"abcd1234"}""")
+            ToolSchema.DONE -> valid(tool.name, """{"answer":"done"}""")
             else -> valid(ToolSchema.DONE, """{"answer":"done"}""")
         }
 
@@ -294,11 +395,13 @@ class ToolSchemaTest {
 
     @Test
     fun theToolsNotOfferedAreNotOffered() {
+        // Bridge-only methods must not appear as model tool *names*.
         for (name in listOf("app.list", "log.list", "log.clear", "agent.stop", "agent.pair")) {
             assertNull(name, ToolSchema.tool(name))
         }
+        // list_apps maps to app.list on the bridge; audit log.* stays off the model.
         val methods = ToolSchema.TOOLS.map { it.method }
-        assertFalse(methods.contains("app.list"))
+        assertTrue(methods.contains("app.list"))
         assertFalse(methods.contains("log.list"))
         assertFalse(methods.contains("log.clear"))
         assertFalse(methods.contains("agent.stop"))

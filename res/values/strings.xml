@@ -15,15 +15,28 @@
      limitations under the License.
 -->
 <resources>
-    <string name="app_name">Agent mode</string>
-    <string name="agent_title">Agent mode</string>
+    <string name="app_name">BestROM Agent</string>
+    <string name="agent_title">Agent</string>
+    <string name="agent_subtitle">Control plane</string>
+    <string name="nav_back">Back</string>
+    <string name="section_power">Power</string>
+    <string name="section_workspace">Workspace</string>
+    <string name="section_capabilities">Capabilities</string>
+    <string name="section_endpoint">Endpoint</string>
+    <string name="section_behavior">Behavior</string>
+    <string name="section_verify">Verify</string>
 
-    <string name="agent_intro">Lets a computer you have connected over USB or adb read this screen and act on it. Nothing leaves the phone on its own.</string>
+    <string name="agent_intro">An on-device agent that can see the screen, tap, type, open apps and call app functions — no cable required. Turn Agent on, connect a brain, then give it a goal.</string>
     <string name="agent_switch_label">Agent mode</string>
+    <string name="agent_switch_summary">Accessibility bridge live on this phone</string>
+    <string name="remote_adb_label">Computer access (adb)</string>
+    <string name="remote_adb_summary">Optional maintainer bridge only. Chat, taps, apps and app functions never need this — leave it off.</string>
 
     <string name="status_header">Status</string>
-    <string name="status_bridge_on">Bridge  listening (bestrom_agent)</string>
-    <string name="status_bridge_off">Bridge  off</string>
+    <string name="status_bridge_on">Agent  ready (on this phone)</string>
+    <string name="status_bridge_off">Agent  off</string>
+    <string name="status_bridge_remote">Adb bridge  listening (bestrom_agent)</string>
+    <string name="status_bridge_remote_off">Adb bridge  off</string>
     <string name="status_a11y_on">Accessibility  connected</string>
     <string name="status_a11y_off">Accessibility  off</string>
     <string name="status_session_paired">Sessions  1 paired</string>
@@ -38,16 +51,16 @@
     <string name="pairing_cooldown">Pairing is refused for another %1$d s after three wrong codes.</string>
 
     <string name="can_do_header">What the agent can do</string>
-    <string name="can_do_body">Read what is on screen.\nTap, swipe and type.\nTake a screenshot.\nOpen apps.\nCall app functions Settings and other apps publish.\nCarry out a task you type, one step at a time, asking before each action.</string>
+    <string name="can_do_body">Plan multi-step goals from a single message.\nRead the live screen (labels, text, hierarchy).\nTap, long-press, swipe and type.\nOpen apps and jump into Settings.\nCall app functions other apps publish.\nSchedule reminders and deferred agent tasks (local alarms).\nOptionally, let a paired computer over adb do the same.</string>
     <string name="cannot_do_header">What it cannot do</string>
     <string name="cannot_do_body">Act while the phone is locked.\nAct while you are touching the screen.\nRead a password field, or type into one.\nDo anything after a restart.\nStart a task on its own.\nAct on anything an app puts on the screen as if it were your instruction.</string>
 
     <string name="caveat_header">What it can still see</string>
     <string name="caveat_body">The contents of any app, including apps that block screenshots. Android hands the screen to an accessibility service whatever the app asks for.\nScreenshots are the one exception: the blocked areas come back blacked out.\nTo keep the agent out of an app entirely, exclude it below.</string>
 
-    <string name="ask_row">Ask the agent</string>
-    <string name="ask_row_summary">Type a task and watch it run, one step at a time</string>
-    <string name="brain_row">Brain</string>
+    <string name="ask_row">Open agent chat</string>
+    <string name="ask_row_summary">Give goals — it plans, acts, and reports back</string>
+    <string name="brain_row">Brain / model</string>
     <string name="brain_row_none">Not set up</string>
     <string name="brain_row_summary">%1$s - %2$s</string>
     <string name="caveat_endpoint">When you run a task, what is on screen is sent to the model endpoint you configured. BestROM operates no endpoint.</string>
@@ -73,27 +86,53 @@
     <string name="needs_notifications">Agent mode needs permission to show its ongoing notification.</string>
     <string name="bridge_failed">The bridge did not start. Agent mode is off.</string>
 
-    <string name="agent_task_title">Ask the agent</string>
+    <string name="agent_task_title">BestROM Agent</string>
     <string name="task_goal_hint">What should the agent do?</string>
     <string name="task_run">Run</string>
     <string name="task_stop">Stop</string>
-    <string name="task_endpoint_note">Everything the agent reads on screen is sent to %1$s.</string>
-    <string name="task_off_message">Agent mode is off.</string>
-    <string name="task_off_button">Turn on Agent mode</string>
-    <string name="task_no_brain_message">No brain is set up yet.</string>
-    <string name="task_no_brain_button">Set up the brain</string>
+    <string name="task_endpoint_note">Screen reads go to %1$s</string>
+    <string name="task_off_message">Agent mode is off. Turn it on to chat and act on the phone.</string>
+    <string name="task_off_button">Open settings</string>
+    <string name="task_no_brain_message">No brain is set up yet. Add an OpenAI-compatible endpoint and API key.</string>
+    <string name="task_no_brain_button">Set up brain</string>
+
+    <string name="chat_composer_hint">Give the agent a goal…</string>
+    <string name="chat_send">Send</string>
+    <string name="chat_new">New chat</string>
+    <string name="chat_menu">Menu</string>
+    <string name="chat_menu_settings">Agent settings</string>
+    <string name="chat_menu_brain">Brain / API</string>
+    <string name="chat_badge">On-device agent</string>
+    <string name="chat_empty_title">What should I do?</string>
+    <string name="chat_empty_body">Describe a goal in plain language. I read the screen, plan steps, tap and type — across Settings, apps and system UI.</string>
+    <string name="chat_suggestions_label">Try a goal</string>
+    <string name="chip_open_settings">Open Settings and find Display</string>
+    <string name="chip_toggle_wifi">Turn Wi‑Fi off, wait 3 seconds, turn it back on</string>
+    <string name="chip_order_food">Order food from Swiggy — stop before payment</string>
+    <string name="chip_summarize_screen">Describe what is on screen right now</string>
+    <string name="chip_maps">Navigate to the nearest coffee shop in Maps</string>
+    <string name="chip_reminder">Remind me in 20 minutes to stand up</string>
+    <string name="chat_status_off">Agent off — enable in settings</string>
+    <string name="chat_status_no_brain">Brain not connected</string>
+    <string name="chat_status_acting">Acting on device…</string>
+    <string name="chat_status_waiting">Waiting for your approval</string>
+    <string name="chat_status_ready">Ready · %1$s</string>
 
     <string name="confirm_title">Allow this action?</string>
     <string name="confirm_allow">Allow</string>
     <string name="confirm_deny">Deny</string>
     <string name="confirm_allow_all">Allow all for this task</string>
-    <string name="confirm_sensitive">This app handles payments or credentials.</string>
+    <string name="confirm_sensitive">This may involve payment or credentials. Confirm on the phone.</string>
 
     <string name="brain_title">Brain</string>
-    <string name="brain_intro">The thinking is done by a model you choose and pay for.\n\nWhile a task runs, everything the agent reads is sent to the endpoint you set up, with your key: the text of every screen it looks at, element labels and resource ids, any notification text on screen, the name and label of every installed app, and every app function this phone publishes. The app list and the function list go once per task even if the agent never opens those apps. Screen contents go on every step as text, and as a PNG if you turn screenshots on. Password fields are the one thing left out.\n\nNothing is kept on the phone: no transcript is written to disk, and the activity log records only the method, the model id and why a task ended. What the endpoint does with what it receives is between you and that provider. BestROM runs none of them and receives none of it. A llama.cpp or Ollama server on your own network is the setup that sends nothing off it.</string>
+    <string name="brain_subtitle">Model endpoint</string>
+    <string name="brain_intro_short">Connect any OpenAI-compatible API. Screen text and labels go to your endpoint while a task runs — never to BestROM.</string>
+    <string name="brain_privacy_note">Password fields are omitted. Screenshots only if you enable them. BestROM operates no model endpoint.</string>
+    <string name="brain_intro">Pick any OpenAI-compatible endpoint: OpenAI, Groq, Gemini\'s OpenAI path, OpenRouter, a self-hosted llama.cpp/Ollama server, or Custom with your own base URL and API key.\n\nWhile a task runs, everything the agent reads is sent to that endpoint with your key: screen text, element labels, installed app names and labels, and app functions this phone publishes. Screenshots go only if you turn them on. Password fields are left out.\n\nAutonomy in Brain settings chooses how far the agent may go: Assist asks each action; Task auto-confirms inside one goal; Background adds idle-drain sampling; Maintainer adds redacted logs for next-build fixes; Full unlocks all of those. Payment and credential apps still ask every time. BestROM runs none of the model providers and receives none of the traffic.</string>
+    <string name="brain_screenshots_title">Send screenshots</string>
     <string name="brain_not_set">Not set</string>
     <string name="brain_preset">Endpoint</string>
-    <string name="brain_base_url">Base URL</string>
+    <string name="brain_base_url">Base URL (OpenAI-compatible …/v1)</string>
     <string name="brain_key">API key</string>
     <string name="brain_key_set">Set</string>
     <string name="brain_key_not_set">Not set</string>
@@ -106,11 +145,28 @@
     <string name="brain_screenshots_on">On</string>
     <string name="brain_screenshots_off">Off. Reading the screen as text costs far less.</string>
     <string name="brain_screenshots_warning">A screenshot costs more than an entire ten step task. Only turn this on for a model that can see images.</string>
-    <string name="brain_confirm">Confirmation</string>
-    <string name="brain_confirm_each">Ask before each action</string>
-    <string name="brain_confirm_autonomous">Autonomous inside a task</string>
+    <string name="brain_confirm">Autonomy</string>
+    <string name="brain_confirm_each">Assist — ask before each action</string>
+    <string name="brain_confirm_autonomous">Task — auto inside a task</string>
     <string name="brain_confirm_autonomous_warning">The agent will tap, type, open apps and change settings without asking, for the whole task, driven by a model whose input includes text that apps and other people wrote. Payment and credential apps still ask every time, and the refused settings stay refused.</string>
     <string name="brain_confirm_autonomous_line">Actions run without asking, inside a task.</string>
+    <string name="brain_autonomy_background">Background — plus idle drain jobs</string>
+    <string name="brain_autonomy_maintainer">Maintainer — plus log / crash tools</string>
+    <string name="brain_autonomy_full">Full — all of the above</string>
+    <string name="brain_autonomy_auto">Auto — skip non-payment confirms</string>
+    <string name="brain_autonomy_bypass">Bypass — never ask (dangerous)</string>
+    <string name="brain_autonomy_background_warning">Background unlocks measure_idle_drain and repeating start_job (idle_drain / error_watch). Payment apps and refused settings still ask or refuse.</string>
+    <string name="brain_autonomy_maintainer_warning">Maintainer unlocks redacted log_tail, log_grep and crash_scan so maintainers can fix the next build. Logs can contain app text; secrets are redacted but treat this as sensitive.</string>
+    <string name="brain_autonomy_full_warning">Full includes Background, Maintainer and macros (notify, drain, crash scan, or run_goal when Agent is on). Payment and credential apps still ask every time. There is still no shell tool.</string>
+    <string name="brain_autonomy_auto_warning">Auto keeps every Full tool, and skips confirm sheets that are not payment, credential or checkout. Wallets, Paytm, and Place order still ask. Refused settings stay refused.</string>
+    <string name="brain_autonomy_bypass_warning">Bypass skips every confirm sheet, including payment and credential apps. Refused settings (lock screen, developer options, accessibility, wipe) still refuse. Only use this on a phone you control.</string>
+    <string name="brain_autonomy_line_assist">Ask before each action.</string>
+    <string name="brain_autonomy_line_task">Auto confirm inside a task.</string>
+    <string name="brain_autonomy_line_background">Task plus battery jobs and idle drain sampling.</string>
+    <string name="brain_autonomy_line_maintainer">Background plus redacted logs for fixes.</string>
+    <string name="brain_autonomy_line_full">All tools including macros.</string>
+    <string name="brain_autonomy_line_auto">Full tools; only payment / checkout still ask.</string>
+    <string name="brain_autonomy_line_bypass">No confirm sheets. Forbidden settings still refuse.</string>
     <string name="brain_steps">Step limit</string>
     <string name="brain_tokens">Token limit</string>
     <string name="brain_test">Test</string>
@@ -129,14 +185,87 @@
 
     <string name="notification_channel">Agent mode</string>
     <string name="notification_title">Agent mode on</string>
-    <string name="notification_text">Tap to stop</string>
-    <string name="notification_text_idle">Stopping soon, no client has connected</string>
+    <string name="notification_text">Computer access on — tap to manage</string>
+    <string name="notification_text_native">Ready on this phone — tap to chat</string>
+    <string name="notification_text_idle">Stopping soon, no computer has connected</string>
     <string name="notification_stop">Stop</string>
-    <string name="notification_ask">Ask</string>
+    <string name="notification_ask">Chat</string>
     <string name="notification_acting">Agent acting</string>
     <string name="notification_waiting">Waiting for your approval</string>
     <string name="notification_stop_task">Stop task</string>
 
     <string name="a11y_description">Reads what is on screen and acts on it for a computer connected over adb, only while Agent mode is on.</string>
     <string name="a11y_summary">Part of Agent mode</string>
+
+    <string name="reminder_channel">Reminders</string>
+    <string name="reminder_channel_desc">Alerts and scheduled agent tasks from BestROM Agent</string>
+    <string name="background_channel">Background jobs</string>
+    <string name="background_channel_desc">Idle drain samples, error watches and macros</string>
+    <string name="reminder_title">Reminder</string>
+    <string name="reminder_task_title">Scheduled task</string>
+
+    <string name="chat_menu_export">Export chat as text</string>
+    <string name="chat_menu_history">Previous chats</string>
+    <string name="chat_history_title">Previous chats</string>
+    <string name="chat_history_empty">No saved chats yet</string>
+    <string name="chat_export_subject">BestROM Agent chat</string>
+    <string name="choice_title">Choose an option</string>
+    <string name="choice_cancel">Cancel</string>
+
+    <string name="alerts_channel">Agent alerts</string>
+    <string name="alerts_channel_desc">Battery and macro alerts</string>
+    <string name="alert_delivery_label">Alert delivery</string>
+    <string name="alert_delivery_summary">Default for battery macros and alerts: %1$s</string>
+
+    <string name="section_security">Security</string>
+    <string name="security_watch_label">Watch important settings</string>
+    <string name="security_watch_summary">Notify if USB debugging, developer options, or accessibility services change</string>
+    <string name="security_watch_title">Important setting changed</string>
+    <string name="security_watch_body">%1$s was changed. Review it if you did not expect this.</string>
+    <string name="reset_agent_label">Reset agent data</string>
+    <string name="reset_agent_summary">Clear macros, jobs, reminders, chat history, mini-apps and audit. Does not undo Settings taps in other apps.</string>
+    <string name="reset_agent_confirm">Clear all agent-owned data? Your API key can be kept or wiped.</string>
+    <string name="reset_keep_key">Keep API key</string>
+    <string name="reset_wipe_key">Wipe API key too</string>
+    <string name="reset_done">Agent data cleared</string>
+
+    <string name="section_miniapps">Mini apps</string>
+    <string name="miniapp_water_label">Water tracker</string>
+    <string name="miniapp_weight_label">Weight tracker</string>
+    <string name="miniapp_open">Open</string>
+    <string name="miniapp_delete">Delete</string>
+    <string name="miniapp_disabled">This mini app is turned off in Agent settings</string>
+    <string name="miniapp_vibecode_header">Vibecode apps</string>
+    <string name="miniapp_vibecode_empty">None yet. Ask the agent (Full autonomy) to create_miniapp.</string>
+    <string name="miniapp_recipe_title">Mini app</string>
+    <string name="miniapp_recipe_widget_label">BestROM mini app</string>
+    <string name="miniapp_missing">That mini app was deleted</string>
+    <string name="miniapp_kind_fmt">Kind: %1$s</string>
+    <string name="miniapp_plus">+1</string>
+    <string name="miniapp_minus">−1</string>
+    <string name="miniapp_counter_fmt">%1$d %2$s</string>
+    <string name="miniapp_check_fmt">%1$d / %2$d done</string>
+    <string name="miniapp_log_hint">Log a line…</string>
+    <string name="miniapp_log_add">Add</string>
+    <string name="miniapp_log_empty">No lines today</string>
+    <string name="miniapp_timer_start">Start</string>
+    <string name="miniapp_timer_clear">Clear</string>
+    <string name="miniapp_timer_idle">Ready · %1$d min</string>
+    <string name="miniapp_timer_left">%1$d:%2$02d left</string>
+    <string name="miniapp_timer_done">Time\'s up</string>
+    <string name="miniapp_widget_empty_title">No mini apps</string>
+    <string name="miniapp_widget_empty_body">Create one in Agent chat</string>
+    <string name="miniapp_delete_confirm">Delete \"%1$s\"?</string>
+    <string name="water_title">Water today</string>
+    <string name="water_add">Add 1 cup</string>
+    <string name="water_undo">Undo last cup</string>
+    <string name="water_status_fmt">%1$d / %2$d cups</string>
+    <string name="water_undo_hint">Nothing to undo</string>
+    <string name="weight_title">Weight log</string>
+    <string name="weight_hint">kg</string>
+    <string name="weight_save">Save today</string>
+    <string name="weight_invalid">Enter a weight between 20 and 400 kg</string>
+    <string name="weight_empty">No entries yet</string>
+    <string name="weight_status_fmt">%1$.1f kg on %2$s · goal %3$s</string>
+    <string name="weight_widget_fmt">%1$.1f kg · %2$s</string>
 </resources>

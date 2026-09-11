@@ -1,340 +1,689 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
      Copyright (C) 2026 The BestROM Project
+     Licensed under the Apache License, Version 2.0
 
-     Licensed under the Apache License, Version 2.0 (the "License");
-     you may not use this file except in compliance with the License.
-     You may obtain a copy of the License at
-
-          http://www.apache.org/licenses/LICENSE-2.0
-
-     Unless required by applicable law or agreed to in writing, software
-     distributed under the License is distributed on an "AS IS" BASIS,
-     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     See the License for the specific language governing permissions and
-     limitations under the License.
+     Agent control panel — carded sections, custom back bar.
 -->
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?android:attr/colorBackground"
-    android:fillViewport="true"
-    android:filterTouchesWhenObscured="true">
+    android:background="@color/agent_bg"
+    android:filterTouchesWhenObscured="true"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="32dp">
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="12dp">
 
-        <TextView
-            android:id="@+id/intro"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/agent_intro"
-            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/agent_switch_label"
-                android:textAppearance="?android:attr/textAppearanceListItem"
-                android:textColor="?android:attr/textColorPrimary" />
-
-            <Switch
-                android:id="@+id/master_switch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="@string/agent_switch_label" />
-        </LinearLayout>
+        <ImageButton
+            android:id="@+id/btn_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/nav_back"
+            android:padding="12dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_back"
+            android:tint="@color/agent_on_surface" />
 
         <LinearLayout
-            android:id="@+id/ask_row"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:background="?android:attr/selectableItemBackground"
+            android:layout_weight="1"
             android:orientation="vertical">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/ask_row"
-                android:textAppearance="?android:attr/textAppearanceListItem"
-                android:textColor="?android:attr/textColorPrimary" />
+                android:text="@string/agent_title"
+                android:textColor="@color/agent_on_surface"
+                android:textSize="20sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/ask_row_summary"
-                android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-                android:textColor="?android:attr/textColorSecondary" />
+                android:text="@string/agent_subtitle"
+                android:textColor="@color/agent_on_surface_muted"
+                android:textSize="12sp" />
         </LinearLayout>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="28dp">
 
         <LinearLayout
-            android:id="@+id/brain_row"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="?android:attr/selectableItemBackground"
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/intro"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/brain_row"
-                android:textAppearance="?android:attr/textAppearanceListItem"
-                android:textColor="?android:attr/textColorPrimary" />
+                android:paddingTop="4dp"
+                android:paddingBottom="8dp"
+                android:text="@string/agent_intro"
+                android:textColor="@color/agent_on_surface_muted"
+                android:textSize="14sp" />
 
+            <!-- Power card -->
             <TextView
-                android:id="@+id/brain_summary"
+                style="@style/Agent.SectionLabel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-                android:textColor="?android:attr/textColorSecondary" />
-        </LinearLayout>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/status_header"
-            android:textAppearance="?android:attr/textAppearanceListItem"
-            android:textColor="?android:attr/textColorPrimary" />
-
-        <TextView
-            android:id="@+id/status_bridge"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:id="@+id/status_a11y"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:id="@+id/status_session"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:id="@+id/status_refused"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <LinearLayout
-            android:id="@+id/pairing_group"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/pairing_header"
-                android:textAppearance="?android:attr/textAppearanceListItem"
-                android:textColor="?android:attr/textColorPrimary" />
+                android:text="@string/section_power" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
 
-                <TextView
-                    android:id="@+id/pairing_code"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:fontFamily="monospace"
-                    android:letterSpacing="0.35"
-                    android:textColor="?android:attr/textColorPrimary"
-                    android:textSize="34sp" />
-
-                <Button
-                    android:id="@+id/new_code"
-                    style="?android:attr/borderlessButtonStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/pairing_new_code"
-                    android:textColor="?android:attr/textColorPrimary" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/pairing_hint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/pairing_hint"
-                android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-                android:textColor="?android:attr/textColorSecondary" />
-
-            <TextView
-                android:id="@+id/pairing_cooldown"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-                android:textColor="?android:attr/textColorSecondary"
-                android:visibility="gone" />
-        </LinearLayout>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/can_do_header"
-            android:textAppearance="?android:attr/textAppearanceListItem"
-            android:textColor="?android:attr/textColorPrimary" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/can_do_body"
-            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/cannot_do_header"
-            android:textAppearance="?android:attr/textAppearanceListItem"
-            android:textColor="?android:attr/textColorPrimary" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/cannot_do_body"
-            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/caveat_header"
-            android:textAppearance="?android:attr/textAppearanceListItem"
-            android:textColor="?android:attr/textColorPrimary" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/caveat_body"
-            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/caveat_endpoint"
-            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/excluded_header"
-                    android:textAppearance="?android:attr/textAppearanceListItem"
-                    android:textColor="?android:attr/textColorPrimary" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Agent.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/agent_switch_label" />
+
+                        <TextView
+                            style="@style/Agent.RowSummary"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/agent_switch_summary" />
+                    </LinearLayout>
+
+                    <Switch
+                        android:id="@+id/master_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/agent_switch_label" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="14dp"
+                    android:layout_marginBottom="14dp"
+                    android:background="@color/agent_outline" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Agent.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/remote_adb_label" />
+
+                        <TextView
+                            style="@style/Agent.RowSummary"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/remote_adb_summary" />
+                    </LinearLayout>
+
+                    <Switch
+                        android:id="@+id/remote_adb_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/remote_adb_label" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Shortcuts -->
+            <TextView
+                style="@style/Agent.SectionLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/section_workspace" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/ask_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        style="@style/Agent.RowTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/ask_row" />
+
+                    <TextView
+                        style="@style/Agent.RowSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/ask_row_summary" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="16dp"
+                    android:background="@color/agent_outline" />
+
+                <LinearLayout
+                    android:id="@+id/brain_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        style="@style/Agent.RowTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/brain_row" />
+
+                    <TextView
+                        android:id="@+id/brain_summary"
+                        style="@style/Agent.RowSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Live status -->
+            <TextView
+                style="@style/Agent.SectionLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/status_header" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/status_bridge"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_status_pill"
+                    android:paddingStart="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="8dp"
+                    android:textColor="@color/agent_on_surface"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/status_a11y"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_status_pill"
+                    android:paddingStart="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="8dp"
+                    android:textColor="@color/agent_on_surface"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/status_session"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_status_pill"
+                    android:paddingStart="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="8dp"
+                    android:textColor="@color/agent_on_surface"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/status_refused"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_status_pill"
+                    android:paddingStart="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="8dp"
+                    android:textColor="@color/agent_on_surface"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- Pairing -->
+            <LinearLayout
+                android:id="@+id/pairing_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    style="@style/Agent.SectionLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/pairing_header" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_card"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/pairing_code"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:fontFamily="monospace"
+                            android:letterSpacing="0.35"
+                            android:textColor="@color/agent_accent"
+                            android:textSize="32sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/new_code"
+                            style="?android:attr/borderlessButtonStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/pairing_new_code"
+                            android:textAllCaps="false"
+                            android:textColor="@color/agent_accent" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/pairing_hint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/pairing_hint"
+                        android:textColor="@color/agent_on_surface_muted"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/pairing_cooldown"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="@color/agent_status_warn"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Capabilities -->
+            <TextView
+                style="@style/Agent.SectionLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/section_capabilities" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    style="@style/Agent.RowTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/can_do_header" />
+
+                <TextView
+                    style="@style/Agent.RowSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/can_do_body" />
+
+                <TextView
+                    style="@style/Agent.RowTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/cannot_do_header" />
+
+                <TextView
+                    style="@style/Agent.RowSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cannot_do_body" />
+
+                <TextView
+                    style="@style/Agent.RowTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/caveat_header" />
+
+                <TextView
+                    style="@style/Agent.RowSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/caveat_body" />
+
+                <TextView
+                    style="@style/Agent.RowSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/caveat_endpoint" />
+            </LinearLayout>
+
+            <!-- Excluded -->
+            <TextView
+                style="@style/Agent.SectionLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/excluded_header" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="16dp">
 
                 <TextView
                     android:id="@+id/excluded_summary"
-                    android:layout_width="match_parent"
+                    style="@style/Agent.RowSummary"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-                    android:textColor="?android:attr/textColorSecondary" />
+                    android:layout_weight="1"
+                    android:paddingTop="0dp" />
+
+                <Button
+                    android:id="@+id/excluded_edit"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/excluded_edit"
+                    android:textAllCaps="false"
+                    android:textColor="@color/agent_accent" />
             </LinearLayout>
 
-            <Button
-                android:id="@+id/excluded_edit"
-                style="?android:attr/borderlessButtonStyle"
-                android:layout_width="wrap_content"
+            <!-- Security + reset -->
+            <TextView
+                style="@style/Agent.SectionLabel"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/excluded_edit"
-                android:textColor="?android:attr/textColorPrimary" />
+                android:text="@string/section_security" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Agent.RowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/security_watch_label" />
+
+                        <TextView
+                            style="@style/Agent.RowSummary"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/security_watch_summary" />
+                    </LinearLayout>
+
+                    <Switch
+                        android:id="@+id/security_watch_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="14dp"
+                    android:layout_marginBottom="14dp"
+                    android:background="@color/agent_outline" />
+
+                <TextView
+                    android:id="@+id/alert_delivery_row"
+                    style="@style/Agent.RowTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/alert_delivery_label" />
+
+                <TextView
+                    android:id="@+id/alert_delivery_summary"
+                    style="@style/Agent.RowSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="14dp"
+                    android:layout_marginBottom="14dp"
+                    android:background="@color/agent_outline" />
+
+                <Button
+                    android:id="@+id/reset_agent"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="-8dp"
+                    android:text="@string/reset_agent_label"
+                    android:textAllCaps="false"
+                    android:textColor="@color/agent_status_bad" />
+
+                <TextView
+                    style="@style/Agent.RowSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/reset_agent_summary" />
+            </LinearLayout>
+
+            <!-- Mini apps -->
+            <TextView
+                style="@style/Agent.SectionLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/section_miniapps" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/Agent.RowTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/miniapp_water_label" />
+
+                    <Switch
+                        android:id="@+id/water_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+
+                    <Button
+                        android:id="@+id/water_open"
+                        style="?android:attr/borderlessButtonStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/miniapp_open"
+                        android:textAllCaps="false"
+                        android:textColor="@color/agent_accent" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/Agent.RowTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/miniapp_weight_label" />
+
+                    <Switch
+                        android:id="@+id/weight_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+
+                    <Button
+                        android:id="@+id/weight_open"
+                        style="?android:attr/borderlessButtonStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/miniapp_open"
+                        android:textAllCaps="false"
+                        android:textColor="@color/agent_accent" />
+                </LinearLayout>
+
+                <TextView
+                    style="@style/Agent.RowSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/miniapp_vibecode_header" />
+
+                <TextView
+                    android:id="@+id/recipe_list_empty"
+                    style="@style/Agent.RowSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/miniapp_vibecode_empty" />
+
+                <LinearLayout
+                    android:id="@+id/recipe_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
+            <!-- Activity -->
+            <TextView
+                style="@style/Agent.SectionLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/activity_header" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/activity_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/activity_empty"
+                    android:textColor="@color/agent_on_surface_muted"
+                    android:textSize="13sp" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/audit_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false" />
+
+                <Button
+                    android:id="@+id/clear_log"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="-8dp"
+                    android:text="@string/activity_clear"
+                    android:textAllCaps="false"
+                    android:textColor="@color/agent_accent" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/footer_reboot"
+                android:textColor="@color/agent_on_surface_muted"
+                android:textSize="12sp" />
         </LinearLayout>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/activity_header"
-            android:textAppearance="?android:attr/textAppearanceListItem"
-            android:textColor="?android:attr/textColorPrimary" />
-
-        <TextView
-            android:id="@+id/activity_empty"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/activity_empty"
-            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/audit_list"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:nestedScrollingEnabled="false" />
-
-        <Button
-            android:id="@+id/clear_log"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:paddingStart="0dp"
-            android:text="@string/activity_clear"
-            android:textColor="?android:attr/textColorPrimary" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/footer_reboot"
-            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-            android:textColor="?android:attr/textColorSecondary" />
-    </LinearLayout>
-</ScrollView>
+    </ScrollView>
+</LinearLayout>

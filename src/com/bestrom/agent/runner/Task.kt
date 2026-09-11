@@ -56,7 +56,7 @@ enum class TaskState {
 class Task(
     val id: String,
     val goal: String,
-    val autonomous: Boolean,
+    val autonomy: com.bestrom.agent.brain.AutonomyLevel,
     val stepCap: Int,
     val tokenCap: Int,
     val vision: Boolean,
@@ -162,5 +162,38 @@ class PendingConfirm(
             return Answer.DENY
         }
         return answer
+    }
+}
+
+/**
+ * A multi-option sheet (e.g. notification vs toast vs dialog for an alert).
+ */
+class PendingChoice(
+    val prompt: String,
+    val options: List<String>,
+) {
+    private val latch = CountDownLatch(1)
+
+    @Volatile
+    private var selected: String? = null
+
+    @Volatile
+    private var answered = false
+
+    @Synchronized
+    fun answer(value: String?) {
+        if (answered) return
+        answered = true
+        selected = value
+        latch.countDown()
+    }
+
+    fun await(timeoutMs: Long = Task.CONFIRM_TIMEOUT_MS): String? {
+        try {
+            if (!latch.await(timeoutMs, TimeUnit.MILLISECONDS)) return null
+        } catch (_: InterruptedException) {
+            return null
+        }
+        return selected
     }
 }

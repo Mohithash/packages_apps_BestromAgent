@@ -35,6 +35,8 @@ object BrainPrefs {
     private const val KEY_MODEL = "brain_model"
     private const val KEY_WORKSPACE = "brain_workspace"
     private const val KEY_SCREENSHOTS = "brain_screenshots"
+    private const val KEY_AUTONOMY = "brain_autonomy"
+    /** Legacy boolean; read only when [KEY_AUTONOMY] is absent. */
     private const val KEY_AUTONOMOUS = "brain_autonomous"
     private const val KEY_STEP_CAP = "brain_step_cap"
     private const val KEY_TOKEN_CAP = "brain_token_cap"
@@ -45,13 +47,19 @@ object BrainPrefs {
     fun read(context: Context): BrainConfig {
         val p = prefs(context)
         val preset = BrainPreset.byName(p.getString(KEY_PRESET, null))
+        val autonomy =
+            if (p.contains(KEY_AUTONOMY)) {
+                AutonomyLevel.byName(p.getString(KEY_AUTONOMY, null))
+            } else {
+                AutonomyLevel.fromLegacyAutonomous(p.getBoolean(KEY_AUTONOMOUS, true))
+            }
         return BrainConfig(
             preset = preset,
             baseUrl = p.getString(KEY_BASE_URL, preset.defaultBaseUrl) ?: preset.defaultBaseUrl,
             model = p.getString(KEY_MODEL, "") ?: "",
             workspaceId = p.getString(KEY_WORKSPACE, "") ?: "",
             screenshots = p.getBoolean(KEY_SCREENSHOTS, false),
-            autonomous = p.getBoolean(KEY_AUTONOMOUS, false),
+            autonomy = autonomy,
             stepCap =
                 p.getInt(KEY_STEP_CAP, BrainConfig.DEFAULT_STEP_CAP)
                     .coerceIn(BrainConfig.MIN_STEP_CAP, BrainConfig.MAX_STEP_CAP),
@@ -69,7 +77,10 @@ object BrainPrefs {
             .putString(KEY_MODEL, config.model)
             .putString(KEY_WORKSPACE, config.workspaceId)
             .putBoolean(KEY_SCREENSHOTS, config.screenshots)
-            .putBoolean(KEY_AUTONOMOUS, config.autonomous)
+            .putString(KEY_AUTONOMY, config.autonomy.name)
+            // Keep legacy key in sync so an older APK reading the same file
+            // still sees Assist vs Task.
+            .putBoolean(KEY_AUTONOMOUS, config.autonomy.skipsMutateConfirm())
             .putInt(KEY_STEP_CAP, config.stepCap)
             .putInt(KEY_TOKEN_CAP, config.tokenCap)
             .apply()

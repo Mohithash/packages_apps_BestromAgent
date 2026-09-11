@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/agent_bg"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <ImageButton
+        android:id="@+id/btn_back"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/nav_back"
+        android:src="@drawable/ic_back"
+        android:tint="@color/agent_on_surface" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="8dp"
+        android:text="@string/water_title"
+        android:textColor="@color/agent_on_surface"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/water_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="24dp"
+        android:paddingBottom="24dp"
+        android:textColor="@color/agent_on_surface"
+        android:textSize="28sp" />
+
+    <Button
+        android:id="@+id/water_add"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/water_add" />
+
+    <Button
+        android:id="@+id/water_undo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/water_undo" />
+</LinearLayout>

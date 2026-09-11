@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 The BestROM Project
+     Licensed under the Apache License, Version 2.0
+-->
+<resources>
+    <!-- Shared agent chrome: custom top bars, no system ActionBar (back was broken). -->
+    <style name="Theme.BestromAgent" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:colorBackground">@color/agent_bg</item>
+        <item name="android:windowBackground">@color/agent_bg</item>
+        <item name="android:statusBarColor">@color/agent_bg</item>
+        <item name="android:navigationBarColor">@color/agent_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:textColorPrimary">@color/agent_on_surface</item>
+        <item name="android:textColorSecondary">@color/agent_on_surface_muted</item>
+        <item name="android:colorControlActivated">@color/agent_accent</item>
+    </style>
+
+    <style name="Theme.BestromAgent.Chat" parent="@style/Theme.BestromAgent">
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+
+    <!-- Parent for Agent.* row styles (dot names require this). -->
+    <style name="Agent" />
+
+    <style name="Agent.SectionLabel">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textColor">@color/agent_on_surface_muted</item>
+        <item name="android:paddingTop">20dp</item>
+        <item name="android:paddingBottom">8dp</item>
+    </style>
+
+    <style name="Agent.RowTitle">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/agent_on_surface</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Agent.RowSummary">
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/agent_on_surface_muted</item>
+        <item name="android:paddingTop">2dp</item>
+    </style>
+</resources>

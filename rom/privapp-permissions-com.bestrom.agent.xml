@@ -30,5 +30,8 @@
     <privapp-permissions package="com.bestrom.agent">
         <permission name="android.permission.EXECUTE_APP_FUNCTIONS" />
         <permission name="android.permission.WRITE_SECURE_SETTINGS" />
+        <permission name="android.permission.READ_LOGS" />
+        <permission name="android.permission.DUMP" />
+        <permission name="android.permission.PACKAGE_USAGE_STATS" />
     </privapp-permissions>
 </permissions>

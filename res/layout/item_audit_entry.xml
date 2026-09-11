@@ -26,8 +26,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:fontFamily="monospace"
-        android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-        android:textColor="?android:attr/textColorSecondary" />
+        android:textColor="@color/agent_on_surface_muted"
+        android:textSize="12sp" />
 
     <TextView
         android:id="@+id/entry_text"
@@ -37,14 +37,14 @@
         android:layout_weight="1"
         android:ellipsize="end"
         android:maxLines="2"
-        android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-        android:textColor="?android:attr/textColorPrimary" />
+        android:textColor="@color/agent_on_surface"
+        android:textSize="13sp" />
 
     <TextView
         android:id="@+id/entry_result"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="12dp"
-        android:textAppearance="?android:attr/textAppearanceListItemSecondary"
-        android:textColor="?android:attr/textColorSecondary" />
+        android:textColor="@color/agent_accent"
+        android:textSize="12sp" />
 </LinearLayout>

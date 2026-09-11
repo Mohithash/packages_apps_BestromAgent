@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 The BestROM Project
+     Licensed under the Apache License, Version 2.0
+-->
+<!-- Chat mark: rounded square + three dots, white on black. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M30,34h48a8,8 0 0 1 8,8v24a8,8 0 0 1 -8,8H54l-10,10v-10H30a8,8 0 0 1 -8,-8V42a8,8 0 0 1 8,-8z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M40,50a4,4 0 1 1 0.01,0zM54,50a4,4 0 1 1 0.01,0zM68,50a4,4 0 1 1 0.01,0z" />
+</vector>

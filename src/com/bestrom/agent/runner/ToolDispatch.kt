@@ -112,6 +112,63 @@ class ToolDispatch(private val host: Methods.Host) {
         if (toolCall.name == ToolSchema.READ_SCREEN) {
             return readScreen(toolCall.args.optInt("max_nodes", ToolSchema.DEFAULT_MAX_NODES))
         }
+        if (toolCall.name == ToolSchema.WAIT) {
+            val ms =
+                toolCall.args
+                    .optInt("ms", ToolSchema.DEFAULT_WAIT_MS)
+                    .coerceIn(ToolSchema.MIN_WAIT_MS, ToolSchema.MAX_WAIT_MS)
+            try {
+                Thread.sleep(ms.toLong())
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return Outcome.Failed(JsonRpc.ACTION_FAILED, "wait interrupted", null)
+            }
+            return Outcome.Ok(JSONObject().put("ok", true).put("waited_ms", ms))
+        }
+        if (toolCall.name == ToolSchema.SCHEDULE_REMINDER ||
+            toolCall.name == ToolSchema.SCHEDULE_TASK ||
+            toolCall.name == ToolSchema.LIST_REMINDERS ||
+            toolCall.name == ToolSchema.CANCEL_REMINDER
+        ) {
+            return com.bestrom.agent.schedule.ReminderTools.run(host.context, toolCall)
+        }
+        if (toolCall.name == ToolSchema.LOG_TAIL ||
+            toolCall.name == ToolSchema.LOG_GREP ||
+            toolCall.name == ToolSchema.CRASH_SCAN
+        ) {
+            return com.bestrom.agent.diag.LogTools.run(host.context, toolCall)
+        }
+        if (toolCall.name == ToolSchema.MEASURE_IDLE_DRAIN) {
+            return com.bestrom.agent.diag.DrainTools.run(host.context, toolCall)
+        }
+        if (toolCall.name == ToolSchema.BATTERYSTATS_SNIPPET) {
+            return com.bestrom.agent.diag.BatterystatsTools.run(host.context, toolCall)
+        }
+        if (toolCall.name == ToolSchema.START_JOB ||
+            toolCall.name == ToolSchema.STOP_JOB ||
+            toolCall.name == ToolSchema.LIST_JOBS
+        ) {
+            return com.bestrom.agent.jobs.JobTools.run(host.context, toolCall)
+        }
+        if (toolCall.name == ToolSchema.SAVE_MACRO ||
+            toolCall.name == ToolSchema.DELETE_MACRO ||
+            toolCall.name == ToolSchema.LIST_MACROS ||
+            toolCall.name == ToolSchema.RUN_MACRO
+        ) {
+            return com.bestrom.agent.macro.MacroTools.run(host.context, toolCall)
+        }
+        if (toolCall.name == ToolSchema.LIST_PLAYBOOKS ||
+            toolCall.name == ToolSchema.RUN_PLAYBOOK
+        ) {
+            return com.bestrom.agent.playbook.PlaybookTools.run(host.context, toolCall)
+        }
+        if (toolCall.name == ToolSchema.CREATE_MINIAPP ||
+            toolCall.name == ToolSchema.LIST_MINIAPPS ||
+            toolCall.name == ToolSchema.DELETE_MINIAPP ||
+            toolCall.name == ToolSchema.OPEN_MINIAPP
+        ) {
+            return com.bestrom.agent.miniapps.MiniAppTools.run(host.context, toolCall)
+        }
         val stale = staleTarget(toolCall)
         if (stale != null) {
             return Outcome.Failed(JsonRpc.STALE_TREE, stale, null)

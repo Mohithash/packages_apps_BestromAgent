@@ -153,8 +153,8 @@ class SystemPromptTest {
     fun theAnswerRuleAsksForTheDataAndNotForADescription() {
         assertTrue(
             build().contains(
-                "it must carry the actual result: \"Battery saver is on\", or \"The network " +
-                    "is Chandrika 5G\" - not \"I checked the settings\"."
+                "it must carry the actual result: \"Battery saver is on\", or \"Reminder set " +
+                    "in 20 minutes\" - not \"I checked the settings\"."
             )
         )
     }

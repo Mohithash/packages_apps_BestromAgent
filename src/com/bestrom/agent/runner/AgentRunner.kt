@@ -32,6 +32,7 @@ import com.bestrom.agent.brain.ChatResponse
 import com.bestrom.agent.brain.OpenAiCompatClient
 import com.bestrom.agent.bridge.JsonRpc
 import com.bestrom.agent.bridge.Methods
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -114,6 +115,12 @@ class AgentRunner(
     private var textOnlyInARow = 0
     private var lengthWarnings = 0
 
+    /**
+     * User / image turns that must not land between an assistant tool_calls
+     * block and its tool replies (providers answer HTTP 400 for that).
+     */
+    private val afterTools = ArrayList<() -> Unit>(4)
+
     /** Drops the model call under the read, so Stop is not a sixty second wait. */
     fun cancel() {
         task.stop.set(true)
@@ -121,6 +128,7 @@ class AgentRunner(
         // A sheet nobody will now answer must not hold the thread for two
         // minutes before it notices the task is over.
         AgentState.confirm?.answer(PendingConfirm.Answer.DENY)
+        AgentState.choice?.answer(null)
         // And a settle wait or a model backoff must not either.
         thread?.interrupt()
     }
@@ -161,7 +169,7 @@ class AgentRunner(
                 task.goal,
                 apps,
                 Denylist.read(context).toSet(),
-                task.autonomous,
+                task.autonomy,
                 settingsPackages,
             )
         val functions = functionCatalogue()
@@ -337,9 +345,16 @@ class AgentRunner(
 
             task.state = TaskState.ACTING
             for (call in response.toolCalls) {
-                if (task.stopped()) return terminate(Task.STOPPED, "")
-                if (act(call)) return
+                if (task.stopped()) {
+                    flushAfterTools()
+                    return terminate(Task.STOPPED, "")
+                }
+                if (act(call)) {
+                    flushAfterTools()
+                    return
+                }
             }
+            flushAfterTools()
 
             when (guard.tokenVerdict()) {
                 StepGuard.Signal.TERMINATE -> return terminate(Task.TOKEN_CAP, "")
@@ -444,8 +459,45 @@ class AgentRunner(
         if (call.name == ToolSchema.DONE) {
             val answer = call.args.optString("answer")
             task.answer = answer
+            // Answer the tool_call so a later forSend() is still well-formed
+            // if the model returned DONE alongside other tools.
+            transcript.addToolResult(call.id, "done", false)
             terminate(Task.DONE, answer)
             return true
+        }
+
+        if (call.name == ToolSchema.DESCRIBE_ALERT_OPTIONS) {
+            val brief = com.bestrom.agent.alert.AlertDelivery.capabilityBrief()
+            transcript.addToolResult(call.id, brief, false)
+            step(task.step, StepEvent.Kind.RESULT, "alert options")
+            return false
+        }
+
+        if (call.name == ToolSchema.OFFER_CHOICES) {
+            val prompt = call.args.optString("prompt").trim()
+            val options = parseChoiceOptions(call.args.opt("options"))
+            if (prompt.isEmpty() || options.isEmpty()) {
+                transcript.addToolResult(call.id, "offer_choices needs prompt and options", false)
+                return false
+            }
+            val picked = askChoices(prompt, options)
+            if (picked == null) {
+                transcript.addToolResult(call.id, "user cancelled or timed out", false)
+            } else {
+                transcript.addToolResult(
+                    call.id,
+                    "user chose: $picked\n" +
+                        com.bestrom.agent.alert.AlertDelivery.capabilityBrief(),
+                    false,
+                )
+            }
+            step(task.step, StepEvent.Kind.RESULT, "offer_choices")
+            return false
+        }
+
+        if (call.name == ToolSchema.LAUNCH_APP) {
+            // Chat goes to PiP before the target covers it.
+            AgentState.keepVisible.set(true)
         }
 
         val engine = policy
@@ -502,9 +554,22 @@ class AgentRunner(
         }
         if (execute(call)) return true
         if (repeated != StepGuard.Signal.NONE) {
-            transcript.addUser(guard.message(repeated, boundary.control))
+            deferUser(guard.message(repeated, boundary.control))
         }
         return false
+    }
+
+    private fun deferUser(text: String) {
+        afterTools.add { transcript.addUser(text) }
+    }
+
+    private fun deferImage(caption: String, pngBase64: String) {
+        afterTools.add { transcript.addImage(caption, pngBase64) }
+    }
+
+    private fun flushAfterTools() {
+        for (action in afterTools) action()
+        afterTools.clear()
     }
 
     private fun ask(decision: PolicyEngine.Decision.NeedsConfirm): PendingConfirm.Answer {
@@ -518,6 +583,39 @@ class AgentRunner(
         task.state = TaskState.ACTING
         notify(Mode.ACTING, task.goal.take(GOAL_IN_NOTIFICATION), task.step)
         return answer
+    }
+
+    private fun askChoices(prompt: String, options: List<String>): String? {
+        val pending = PendingChoice(prompt, options)
+        task.state = TaskState.WAITING
+        AgentState.choice = pending
+        step(task.step, StepEvent.Kind.CONFIRM, "waiting for a choice - $prompt")
+        notify(Mode.WAITING, "", task.step)
+        val answer = pending.await()
+        AgentState.choice = null
+        task.state = TaskState.ACTING
+        notify(Mode.ACTING, task.goal.take(GOAL_IN_NOTIFICATION), task.step)
+        return answer
+    }
+
+    private fun parseChoiceOptions(raw: Any?): List<String> {
+        val arr =
+            when (raw) {
+                is org.json.JSONArray -> raw
+                is String ->
+                    try {
+                        org.json.JSONArray(raw)
+                    } catch (_: Exception) {
+                        null
+                    }
+                else -> null
+            } ?: return emptyList()
+        val out = ArrayList<String>()
+        for (i in 0 until arr.length().coerceAtMost(6)) {
+            val s = arr.optString(i).trim()
+            if (s.isNotEmpty() && s.length <= 40) out.add(s)
+        }
+        return out
     }
 
     /** Runs the call, retrying only the one error that is a race with a person. */
@@ -567,7 +665,7 @@ class AgentRunner(
                         return true
                     }
                     if (signal != StepGuard.Signal.NONE) {
-                        transcript.addUser(guard.message(signal, boundary.control))
+                        deferUser(guard.message(signal, boundary.control))
                     }
                     return false
                 }
@@ -609,7 +707,7 @@ class AgentRunner(
             return true
         }
         if (signal != StepGuard.Signal.NONE) {
-            transcript.addUser(guard.message(signal, boundary.control))
+            deferUser(guard.message(signal, boundary.control))
         }
         return false
     }
@@ -648,7 +746,7 @@ class AgentRunner(
         if (call.name == ToolSchema.SCREENSHOT) {
             val png = result.optString("png_base64")
             transcript.addToolResult(call.id, "screenshot taken", false)
-            if (png.isNotEmpty()) transcript.addImage("The screenshot.", png)
+            if (png.isNotEmpty()) deferImage("The screenshot.", png)
             step(task.step, StepEvent.Kind.RESULT, "screenshot")
             return false
         }
@@ -661,6 +759,196 @@ class AgentRunner(
                 false,
             )
             step(task.step, StepEvent.Kind.RESULT, "listed app functions")
+            return false
+        }
+
+        if (call.name == ToolSchema.LIST_APPS) {
+            val apps = result.optJSONArray("apps") ?: JSONArray()
+            val sb = StringBuilder()
+            for (i in 0 until apps.length()) {
+                val app = apps.optJSONObject(i) ?: continue
+                if (sb.isNotEmpty()) sb.append('\n')
+                sb.append(app.optString("package"))
+                    .append(" - ")
+                    .append(app.optString("label"))
+            }
+            transcript.addToolResult(
+                call.id,
+                boundary.envelope(call.name, "", sb.toString().ifEmpty { "none" }),
+                false,
+            )
+            step(task.step, StepEvent.Kind.RESULT, "listed apps")
+            return false
+        }
+
+        if (call.name == ToolSchema.WAIT) {
+            val waited = "waited " + result.optInt("waited_ms") + " ms"
+            step(task.step, StepEvent.Kind.RESULT, "waited")
+            sleep(SETTLE_MS)
+            val read = dispatch.readScreen()
+            val digest = dispatch.digest
+            if (read is ToolDispatch.Outcome.Ok && digest != null) {
+                // Same tool_call_id — a second fake id (id:screen) is a 400.
+                transcript.addToolResult(
+                    call.id,
+                    waited +
+                        "\n\n" +
+                        boundary.envelope(
+                            ToolSchema.READ_SCREEN,
+                            digest.windowPackage,
+                            digest.text,
+                        ),
+                    true,
+                )
+                noteScreen(digest)
+            } else {
+                transcript.addToolResult(call.id, waited, false)
+            }
+            return false
+        }
+
+        if (call.name == ToolSchema.SCHEDULE_REMINDER ||
+            call.name == ToolSchema.SCHEDULE_TASK ||
+            call.name == ToolSchema.LIST_REMINDERS ||
+            call.name == ToolSchema.CANCEL_REMINDER
+        ) {
+            val line =
+                when (call.name) {
+                    ToolSchema.LIST_REMINDERS ->
+                        "reminders: " + result.optInt("count") + "\n" +
+                            result.optJSONArray("reminders").toString()
+                    ToolSchema.CANCEL_REMINDER ->
+                        "cancelled " + result.optString("id")
+                    else ->
+                        "scheduled " +
+                            result.optString("kind") +
+                            " id=" +
+                            result.optString("id") +
+                            " at " +
+                            result.optString("fire_at_utc")
+                }
+            transcript.addToolResult(
+                call.id,
+                boundary.envelope(call.name, "", line),
+                false,
+            )
+            step(task.step, StepEvent.Kind.RESULT, call.name)
+            return false
+        }
+
+        if (call.name == ToolSchema.LOG_TAIL ||
+            call.name == ToolSchema.LOG_GREP ||
+            call.name == ToolSchema.CRASH_SCAN ||
+            call.name == ToolSchema.MEASURE_IDLE_DRAIN ||
+            call.name == ToolSchema.BATTERYSTATS_SNIPPET
+        ) {
+            val line =
+                when (call.name) {
+                    ToolSchema.CRASH_SCAN ->
+                        "exits=" + result.optInt("count") + "\n" +
+                            result.optJSONArray("exits").toString()
+                    ToolSchema.MEASURE_IDLE_DRAIN ->
+                        "level=" +
+                            result.optInt("level_pct") +
+                            "% status=" +
+                            result.optString("status") +
+                            " current_ua=" +
+                            result.optLong("current_now_ua") +
+                            if (result.has("estimated_avg_drain_ma")) {
+                                " avg_ma=" + result.optDouble("estimated_avg_drain_ma")
+                            } else if (result.optBoolean("first_sample")) {
+                                " (first sample)"
+                            } else {
+                                ""
+                            }
+                    else -> {
+                        val matched =
+                            if (result.has("matched")) " matched=" + result.optInt("matched")
+                            else ""
+                        "chars=" + result.optInt("chars") + matched + "\n" +
+                            result.optString("text")
+                    }
+                }
+            transcript.addToolResult(
+                call.id,
+                boundary.envelope(call.name, "", line),
+                false,
+            )
+            step(task.step, StepEvent.Kind.RESULT, call.name)
+            return false
+        }
+
+        if (call.name == ToolSchema.START_JOB ||
+            call.name == ToolSchema.STOP_JOB ||
+            call.name == ToolSchema.LIST_JOBS ||
+            call.name == ToolSchema.SAVE_MACRO ||
+            call.name == ToolSchema.DELETE_MACRO ||
+            call.name == ToolSchema.LIST_MACROS ||
+            call.name == ToolSchema.RUN_MACRO ||
+            call.name == ToolSchema.LIST_PLAYBOOKS ||
+            call.name == ToolSchema.RUN_PLAYBOOK ||
+            call.name == ToolSchema.CREATE_MINIAPP ||
+            call.name == ToolSchema.LIST_MINIAPPS ||
+            call.name == ToolSchema.DELETE_MINIAPP ||
+            call.name == ToolSchema.OPEN_MINIAPP
+        ) {
+            val line =
+                when (call.name) {
+                    ToolSchema.LIST_JOBS ->
+                        "jobs=" + result.optInt("count") + "\n" +
+                            result.optJSONArray("jobs").toString()
+                    ToolSchema.LIST_MACROS ->
+                        "macros=" + result.optInt("count") + "\n" +
+                            result.optJSONArray("macros").toString()
+                    ToolSchema.LIST_PLAYBOOKS ->
+                        "playbooks=" + result.optInt("count") + "\n" +
+                            result.optJSONArray("playbooks").toString()
+                    ToolSchema.LIST_MINIAPPS ->
+                        "miniapps=" + result.optInt("count") + "\n" +
+                            result.optJSONArray("miniapps").toString()
+                    ToolSchema.RUN_MACRO ->
+                        "macro " + result.optString("id") + "\n" + result.optString("result")
+                    ToolSchema.RUN_PLAYBOOK ->
+                        "playbook " +
+                            result.optString("id") +
+                            " started=" +
+                            result.optBoolean("started") +
+                            "\n" +
+                            result.optString("goal") +
+                            "\n" +
+                            result.optString("note")
+                    ToolSchema.START_JOB ->
+                        "job " +
+                            result.optString("kind") +
+                            " id=" +
+                            result.optString("id") +
+                            " next=" +
+                            result.optString("next_fire_utc")
+                    ToolSchema.SAVE_MACRO ->
+                        "macro " +
+                            result.optString("name") +
+                            " id=" +
+                            result.optString("id") +
+                            " trigger=" +
+                            result.optString("trigger")
+                    ToolSchema.CREATE_MINIAPP ->
+                        "miniapp " +
+                            result.optString("name") +
+                            " id=" +
+                            result.optString("id") +
+                            " kind=" +
+                            result.optString("kind") +
+                            "\n" +
+                            result.optString("note")
+                    else ->
+                        call.name + " id=" + result.optString("id") + " ok"
+                }
+            transcript.addToolResult(
+                call.id,
+                boundary.envelope(call.name, "", line),
+                false,
+            )
+            step(task.step, StepEvent.Kind.RESULT, call.name)
             return false
         }
 
@@ -702,7 +990,7 @@ class AgentRunner(
             terminate(Task.STUCK, "")
             return true
         }
-        if (signal != StepGuard.Signal.NONE) transcript.addUser(guard.message(signal, boundary.control))
+        if (signal != StepGuard.Signal.NONE) deferUser(guard.message(signal, boundary.control))
         return false
     }
 
@@ -751,6 +1039,8 @@ class AgentRunner(
 
     private fun terminate(reason: String, detail: String) {
         if (task.finished()) return
+        AgentState.keepVisible.set(false)
+        afterTools.clear()
         task.reason = reason
         if (detail.isNotEmpty() && task.answer.isEmpty()) task.answer = detail
         task.state = TaskState.FINISHED

@@ -31,6 +31,7 @@ import android.widget.TextView
 import android.widget.Toast
 import com.bestrom.agent.R
 import com.bestrom.agent.brain.ApiKeyStore
+import com.bestrom.agent.brain.AutonomyLevel
 import com.bestrom.agent.brain.BrainConfig
 import com.bestrom.agent.brain.BrainPreset
 import com.bestrom.agent.brain.BrainPrefs
@@ -72,8 +73,7 @@ class BrainSettingsActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_brain_settings)
-        setTitle(R.string.brain_title)
-        actionBar?.setDisplayHomeAsUpEnabled(true)
+        findViewById<View>(R.id.btn_back).setOnClickListener { finish() }
 
         presetRow = findViewById(R.id.preset_summary)
         baseUrlRow = findViewById(R.id.base_url_summary)
@@ -136,10 +136,29 @@ class BrainSettingsActivity : Activity() {
             else R.string.brain_screenshots_off
         )
         confirmRow.setText(
-            if (config.autonomous) R.string.brain_confirm_autonomous
-            else R.string.brain_confirm_each
+            when (config.autonomy) {
+                AutonomyLevel.ASSIST -> R.string.brain_confirm_each
+                AutonomyLevel.TASK -> R.string.brain_confirm_autonomous
+                AutonomyLevel.BACKGROUND -> R.string.brain_autonomy_background
+                AutonomyLevel.MAINTAINER -> R.string.brain_autonomy_maintainer
+                AutonomyLevel.FULL -> R.string.brain_autonomy_full
+                AutonomyLevel.AUTO -> R.string.brain_autonomy_auto
+                AutonomyLevel.BYPASS -> R.string.brain_autonomy_bypass
+            }
         )
-        confirmWarning.visibility = if (config.autonomous) View.VISIBLE else View.GONE
+        confirmWarning.setText(
+            when (config.autonomy) {
+                AutonomyLevel.ASSIST -> R.string.brain_autonomy_line_assist
+                AutonomyLevel.TASK -> R.string.brain_confirm_autonomous_line
+                AutonomyLevel.BACKGROUND -> R.string.brain_autonomy_line_background
+                AutonomyLevel.MAINTAINER -> R.string.brain_autonomy_line_maintainer
+                AutonomyLevel.FULL -> R.string.brain_autonomy_line_full
+                AutonomyLevel.AUTO -> R.string.brain_autonomy_line_auto
+                AutonomyLevel.BYPASS -> R.string.brain_autonomy_line_bypass
+            }
+        )
+        confirmWarning.visibility =
+            if (config.autonomy == AutonomyLevel.ASSIST) View.GONE else View.VISIBLE
         stepRow.text = config.stepCap.toString()
         tokenRow.text = config.tokenCap.toString()
     }
@@ -234,28 +253,66 @@ class BrainSettingsActivity : Activity() {
     }
 
     private fun pickConfirmation() {
+        val levels = AutonomyLevel.values()
         val labels =
             arrayOf(
                 getString(R.string.brain_confirm_each),
                 getString(R.string.brain_confirm_autonomous),
+                getString(R.string.brain_autonomy_background),
+                getString(R.string.brain_autonomy_maintainer),
+                getString(R.string.brain_autonomy_full),
+                getString(R.string.brain_autonomy_auto),
+                getString(R.string.brain_autonomy_bypass),
             )
         AlertDialog.Builder(this)
             .setTitle(R.string.brain_confirm)
-            .setSingleChoiceItems(labels, if (config.autonomous) 1 else 0) { dialog, which ->
+            .setSingleChoiceItems(labels, config.autonomy.ordinal) { dialog, which ->
                 dialog.dismiss()
-                if (which == 0) {
-                    config = config.copy(autonomous = false)
+                val chosen = levels[which]
+                if (chosen == AutonomyLevel.ASSIST || chosen == AutonomyLevel.TASK) {
+                    // TASK keeps the existing one-shot warning when raising from Assist.
+                    if (chosen == AutonomyLevel.TASK &&
+                        !config.autonomy.skipsMutateConfirm()
+                    ) {
+                        AlertDialog.Builder(this)
+                            .setTitle(R.string.brain_confirm_autonomous)
+                            .setMessage(R.string.brain_confirm_autonomous_warning)
+                            .setNegativeButton(R.string.brain_cancel, null)
+                            .setPositiveButton(R.string.brain_turn_on) { _, _ ->
+                                config = config.copy(autonomy = AutonomyLevel.TASK)
+                                save()
+                            }
+                            .show()
+                        return@setSingleChoiceItems
+                    }
+                    config = config.copy(autonomy = chosen)
                     save()
                     return@setSingleChoiceItems
                 }
-                // Turning the asking off is a deliberate act, said in words
-                // once, and the warning under the row stays there afterwards.
+                val title =
+                    when (chosen) {
+                        AutonomyLevel.BACKGROUND -> R.string.brain_autonomy_background
+                        AutonomyLevel.MAINTAINER -> R.string.brain_autonomy_maintainer
+                        AutonomyLevel.FULL -> R.string.brain_autonomy_full
+                        AutonomyLevel.AUTO -> R.string.brain_autonomy_auto
+                        AutonomyLevel.BYPASS -> R.string.brain_autonomy_bypass
+                        else -> R.string.brain_autonomy_full
+                    }
+                val message =
+                    when (chosen) {
+                        AutonomyLevel.BACKGROUND -> R.string.brain_autonomy_background_warning
+                        AutonomyLevel.MAINTAINER -> R.string.brain_autonomy_maintainer_warning
+                        AutonomyLevel.FULL -> R.string.brain_autonomy_full_warning
+                        AutonomyLevel.AUTO -> R.string.brain_autonomy_auto_warning
+                        AutonomyLevel.BYPASS -> R.string.brain_autonomy_bypass_warning
+                        else -> R.string.brain_autonomy_full_warning
+                    }
                 AlertDialog.Builder(this)
-                    .setTitle(R.string.brain_confirm_autonomous)
-                    .setMessage(R.string.brain_confirm_autonomous_warning)
+                    .setTitle(title)
+                    .setMessage(message)
                     .setNegativeButton(R.string.brain_cancel, null)
                     .setPositiveButton(R.string.brain_turn_on) { _, _ ->
-                        config = config.copy(autonomous = true)
+                        config = config.copy(autonomy = chosen)
                         save()
                     }
                     .show()

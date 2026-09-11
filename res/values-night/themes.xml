@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 The BestROM Project
+     Licensed under the Apache License, Version 2.0
+-->
+<resources>
+    <style name="Theme.BestromAgent" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:colorBackground">@color/agent_bg</item>
+        <item name="android:windowBackground">@color/agent_bg</item>
+        <item name="android:statusBarColor">@color/agent_bg</item>
+        <item name="android:navigationBarColor">@color/agent_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:textColorPrimary">@color/agent_on_surface</item>
+        <item name="android:textColorSecondary">@color/agent_on_surface_muted</item>
+        <item name="android:colorControlActivated">@color/agent_accent</item>
+    </style>
+
+    <style name="Theme.BestromAgent.Chat" parent="@style/Theme.BestromAgent">
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+</resources>

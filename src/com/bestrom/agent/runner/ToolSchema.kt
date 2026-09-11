@@ -45,12 +45,41 @@ object ToolSchema {
     const val TYPE = "type"
     const val KEY = "key"
     const val LAUNCH_APP = "launch_app"
+    const val LIST_APPS = "list_apps"
     const val LIST_FUNCTIONS = "list_functions"
     const val CALL_FUNCTION = "call_function"
     const val SCREENSHOT = "screenshot"
+    const val WAIT = "wait"
     const val DONE = "done"
+    const val SCHEDULE_REMINDER = "schedule_reminder"
+    const val SCHEDULE_TASK = "schedule_task"
+    const val LIST_REMINDERS = "list_reminders"
+    const val CANCEL_REMINDER = "cancel_reminder"
+    const val LOG_TAIL = "log_tail"
+    const val LOG_GREP = "log_grep"
+    const val CRASH_SCAN = "crash_scan"
+    const val MEASURE_IDLE_DRAIN = "measure_idle_drain"
+    const val BATTERYSTATS_SNIPPET = "batterystats_snippet"
+    const val START_JOB = "start_job"
+    const val STOP_JOB = "stop_job"
+    const val LIST_JOBS = "list_jobs"
+    const val SAVE_MACRO = "save_macro"
+    const val DELETE_MACRO = "delete_macro"
+    const val LIST_MACROS = "list_macros"
+    const val RUN_MACRO = "run_macro"
+    const val LIST_PLAYBOOKS = "list_playbooks"
+    const val RUN_PLAYBOOK = "run_playbook"
+    const val OFFER_CHOICES = "offer_choices"
+    const val DESCRIBE_ALERT_OPTIONS = "describe_alert_options"
+    const val CREATE_MINIAPP = "create_miniapp"
+    const val LIST_MINIAPPS = "list_miniapps"
+    const val DELETE_MINIAPP = "delete_miniapp"
+    const val OPEN_MINIAPP = "open_miniapp"
 
     const val MAX_TYPE_CHARS = 4096
+    const val MIN_WAIT_MS = 100
+    const val MAX_WAIT_MS = 10000
+    const val DEFAULT_WAIT_MS = 1000
 
     /** The keys ui.key accepts, and the whole set the model may name. */
     val KEY_NAMES: List<String> =
@@ -185,6 +214,13 @@ object ToolSchema {
                 listOf(Param("package", "string", true, "")),
             ),
             Tool(
+                LIST_APPS,
+                "app.list",
+                false,
+                "List installed apps (package and label).",
+                emptyList(),
+            ),
+            Tool(
                 LIST_FUNCTIONS,
                 "functions.list",
                 false,
@@ -211,6 +247,374 @@ object ToolSchema {
                 vision = true,
             ),
             Tool(
+                WAIT,
+                "",
+                false,
+                "Pause before reading the screen again.",
+                listOf(
+                    Param(
+                        "ms",
+                        "integer",
+                        false,
+                        "$DEFAULT_WAIT_MS by default.",
+                        minimum = MIN_WAIT_MS,
+                        maximum = MAX_WAIT_MS,
+                    )
+                ),
+            ),
+            Tool(
+                SCHEDULE_REMINDER,
+                "",
+                true,
+                "Schedule a local notification reminder.",
+                listOf(
+                    Param("message", "string", true, "What the notification says."),
+                    Param(
+                        "in_minutes",
+                        "integer",
+                        false,
+                        "Fire after this many minutes (1..43200).",
+                        minimum = 1,
+                        maximum = 43200,
+                    ),
+                    Param("at_unix_ms", "integer", false, "Or an absolute unix time in ms."),
+                ),
+            ),
+            Tool(
+                SCHEDULE_TASK,
+                "",
+                true,
+                "Schedule an agent goal to run later (needs Agent mode on at fire time).",
+                listOf(
+                    Param("goal", "string", true, "The goal to run later."),
+                    Param(
+                        "in_minutes",
+                        "integer",
+                        false,
+                        "Fire after this many minutes (1..43200).",
+                        minimum = 1,
+                        maximum = 43200,
+                    ),
+                    Param("at_unix_ms", "integer", false, "Or an absolute unix time in ms."),
+                ),
+            ),
+            Tool(
+                LIST_REMINDERS,
+                "",
+                false,
+                "List pending reminders and scheduled tasks.",
+                emptyList(),
+            ),
+            Tool(
+                CANCEL_REMINDER,
+                "",
+                true,
+                "Cancel a reminder or scheduled task by id.",
+                listOf(Param("id", "string", true, "From list_reminders.")),
+            ),
+            Tool(
+                LOG_TAIL,
+                "",
+                false,
+                "Read recent logcat (Maintainer+). Bounded and redacted.",
+                listOf(
+                    Param(
+                        "lines",
+                        "integer",
+                        false,
+                        "How many lines (20..400).",
+                        minimum = com.bestrom.agent.diag.LogLimits.MIN_LINES,
+                        maximum = com.bestrom.agent.diag.LogLimits.MAX_LINES,
+                    ),
+                    Param("tag", "string", false, "Optional logcat tag filter."),
+                ),
+            ),
+            Tool(
+                LOG_GREP,
+                "",
+                false,
+                "Grep recent logcat for a pattern (Maintainer+).",
+                listOf(
+                    Param("pattern", "string", true, "Case-insensitive substring."),
+                    Param(
+                        "lines",
+                        "integer",
+                        false,
+                        "Max matching lines to return.",
+                        minimum = com.bestrom.agent.diag.LogLimits.MIN_LINES,
+                        maximum = com.bestrom.agent.diag.LogLimits.MAX_LINES,
+                    ),
+                    Param("tag", "string", false, "Optional logcat tag filter."),
+                ),
+            ),
+            Tool(
+                CRASH_SCAN,
+                "",
+                false,
+                "List recent process exits / ANRs (Maintainer+).",
+                listOf(
+                    Param(
+                        "max",
+                        "integer",
+                        false,
+                        "Max entries (1..16).",
+                        minimum = 1,
+                        maximum = com.bestrom.agent.diag.LogLimits.MAX_CRASH_ENTRIES,
+                    ),
+                ),
+            ),
+            Tool(
+                MEASURE_IDLE_DRAIN,
+                "",
+                false,
+                "Battery snapshot; call twice for idle drain delta (Background+).",
+                emptyList(),
+            ),
+            Tool(
+                BATTERYSTATS_SNIPPET,
+                "",
+                false,
+                "Bounded batterystats dump (Maintainer+).",
+                listOf(
+                    Param(
+                        "mode",
+                        "string",
+                        false,
+                        "full or checkin.",
+                        enumValues =
+                            listOf(
+                                com.bestrom.agent.diag.BatterystatsLimits.MODE_FULL,
+                                com.bestrom.agent.diag.BatterystatsLimits.MODE_CHECKIN,
+                            ),
+                    ),
+                    Param(
+                        "focus",
+                        "string",
+                        false,
+                        "summary, discharge, screen, wifi, cpu, uid, …",
+                    ),
+                    Param(
+                        "max_bytes",
+                        "integer",
+                        false,
+                        "Size cap.",
+                        minimum = com.bestrom.agent.diag.BatterystatsLimits.MIN_MAX_BYTES,
+                        maximum = com.bestrom.agent.diag.BatterystatsLimits.MAX_MAX_BYTES,
+                    ),
+                ),
+            ),
+            Tool(
+                START_JOB,
+                "",
+                true,
+                "Start a repeating background job (Background+).",
+                listOf(
+                    Param(
+                        "kind",
+                        "string",
+                        true,
+                        "idle_drain or error_watch.",
+                        enumValues =
+                            listOf(
+                                com.bestrom.agent.jobs.JobLimits.KIND_IDLE_DRAIN,
+                                com.bestrom.agent.jobs.JobLimits.KIND_ERROR_WATCH,
+                            ),
+                    ),
+                    Param(
+                        "interval_minutes",
+                        "integer",
+                        true,
+                        "15..1440.",
+                        minimum = com.bestrom.agent.jobs.JobLimits.MIN_INTERVAL_MINUTES,
+                        maximum = com.bestrom.agent.jobs.JobLimits.MAX_INTERVAL_MINUTES,
+                    ),
+                    Param("label", "string", false, "Short name for the notification."),
+                ),
+            ),
+            Tool(
+                STOP_JOB,
+                "",
+                true,
+                "Stop a background job by id.",
+                listOf(Param("id", "string", true, "From list_jobs.")),
+            ),
+            Tool(
+                LIST_JOBS,
+                "",
+                false,
+                "List repeating background jobs.",
+                emptyList(),
+            ),
+            Tool(
+                SAVE_MACRO,
+                "",
+                true,
+                "Save a macro (Full).",
+                listOf(
+                    Param("name", "string", true, "Macro name."),
+                    Param(
+                        "trigger",
+                        "string",
+                        true,
+                        "interval, once, boot, or battery_below.",
+                        enumValues =
+                            listOf(
+                                com.bestrom.agent.macro.MacroLimits.TRIGGER_INTERVAL,
+                                com.bestrom.agent.macro.MacroLimits.TRIGGER_ONCE,
+                                com.bestrom.agent.macro.MacroLimits.TRIGGER_BOOT,
+                                com.bestrom.agent.macro.MacroLimits.TRIGGER_BATTERY_BELOW,
+                            ),
+                    ),
+                    Param(
+                        "interval_minutes",
+                        "integer",
+                        false,
+                        "For trigger=interval.",
+                        minimum = com.bestrom.agent.macro.MacroLimits.MIN_INTERVAL_MINUTES,
+                        maximum = com.bestrom.agent.macro.MacroLimits.MAX_INTERVAL_MINUTES,
+                    ),
+                    Param("at_unix_ms", "integer", false, "For trigger=once."),
+                    Param(
+                        "battery_below_pct",
+                        "integer",
+                        false,
+                        "For trigger=battery_below. Fires once per dip under this percent.",
+                        minimum = com.bestrom.agent.macro.MacroLimits.MIN_BATTERY_BELOW_PCT,
+                        maximum = com.bestrom.agent.macro.MacroLimits.MAX_BATTERY_BELOW_PCT,
+                    ),
+                    Param(
+                        "steps",
+                        "string",
+                        true,
+                        "JSON array of {tool,args}. Tools: measure_idle_drain, crash_scan, log_grep, notify, schedule_reminder, run_goal.",
+                    ),
+                ),
+            ),
+            Tool(
+                DELETE_MACRO,
+                "",
+                true,
+                "Delete a macro by id.",
+                listOf(Param("id", "string", true, "From list_macros.")),
+            ),
+            Tool(
+                LIST_MACROS,
+                "",
+                false,
+                "List saved macros.",
+                emptyList(),
+            ),
+            Tool(
+                RUN_MACRO,
+                "",
+                true,
+                "Run a macro once now.",
+                listOf(Param("id", "string", true, "From list_macros.")),
+            ),
+            Tool(
+                LIST_PLAYBOOKS,
+                "",
+                false,
+                "List curated app playbooks.",
+                emptyList(),
+            ),
+            Tool(
+                RUN_PLAYBOOK,
+                "",
+                true,
+                "Run a curated playbook goal (Full). Pay still confirms.",
+                listOf(
+                    Param("id", "string", true, "From list_playbooks."),
+                    Param(
+                        "detail",
+                        "string",
+                        false,
+                        "When needs_detail (food, place, alarm).",
+                    ),
+                ),
+            ),
+            Tool(
+                DESCRIBE_ALERT_OPTIONS,
+                "",
+                false,
+                "Explain toast / notification / dialog alert options.",
+                emptyList(),
+            ),
+            Tool(
+                OFFER_CHOICES,
+                "",
+                true,
+                "Ask the user to pick one option on the phone.",
+                listOf(
+                    Param("prompt", "string", true, "Question shown on the sheet."),
+                    Param(
+                        "options",
+                        "string",
+                        true,
+                        "JSON array of short labels, e.g. [\"notification\",\"toast\",\"dialog\"].",
+                    ),
+                ),
+            ),
+            Tool(
+                CREATE_MINIAPP,
+                "",
+                true,
+                "Create a vibecode mini app (Full). Kinds: counter, checklist, daily_log, timer.",
+                listOf(
+                    Param("name", "string", true, "Short title."),
+                    Param(
+                        "kind",
+                        "string",
+                        true,
+                        "counter, checklist, daily_log, or timer.",
+                        enumValues =
+                            listOf(
+                                com.bestrom.agent.miniapps.MiniAppLimits.KIND_COUNTER,
+                                com.bestrom.agent.miniapps.MiniAppLimits.KIND_CHECKLIST,
+                                com.bestrom.agent.miniapps.MiniAppLimits.KIND_DAILY_LOG,
+                                com.bestrom.agent.miniapps.MiniAppLimits.KIND_TIMER,
+                            ),
+                    ),
+                    Param("goal", "string", false, "Optional blurb."),
+                    Param("unit", "string", false, "For counter (cups, reps, …)."),
+                    Param(
+                        "items",
+                        "string",
+                        false,
+                        "JSON string array for checklist.",
+                    ),
+                    Param(
+                        "timer_minutes",
+                        "integer",
+                        false,
+                        "For timer.",
+                        minimum = com.bestrom.agent.miniapps.MiniAppLimits.MIN_TIMER_MINUTES,
+                        maximum = com.bestrom.agent.miniapps.MiniAppLimits.MAX_TIMER_MINUTES,
+                    ),
+                ),
+            ),
+            Tool(
+                LIST_MINIAPPS,
+                "",
+                false,
+                "List vibecode mini apps.",
+                emptyList(),
+            ),
+            Tool(
+                DELETE_MINIAPP,
+                "",
+                true,
+                "Delete a vibecode mini app by id.",
+                listOf(Param("id", "string", true, "From list_miniapps.")),
+            ),
+            Tool(
+                OPEN_MINIAPP,
+                "",
+                true,
+                "Open a vibecode mini app on screen.",
+                listOf(Param("id", "string", true, "From list_miniapps.")),
+            ),
+            Tool(
                 DONE,
                 "",
                 false,
@@ -218,6 +622,23 @@ object ToolSchema {
                 listOf(Param("answer", "string", true, "What the user reads.")),
             ),
         )
+
+    /**
+     * Minimum [com.bestrom.agent.brain.AutonomyLevel] for tools that unlock
+     * above Assist/Task. null means any level (normal UI / schedule tools).
+     */
+    fun minAutonomy(name: String): com.bestrom.agent.brain.AutonomyLevel? =
+        when (name) {
+            MEASURE_IDLE_DRAIN, START_JOB, STOP_JOB, LIST_JOBS ->
+                com.bestrom.agent.brain.AutonomyLevel.BACKGROUND
+            LOG_TAIL, LOG_GREP, CRASH_SCAN, BATTERYSTATS_SNIPPET ->
+                com.bestrom.agent.brain.AutonomyLevel.MAINTAINER
+            SAVE_MACRO, DELETE_MACRO, LIST_MACROS, RUN_MACRO,
+            LIST_PLAYBOOKS, RUN_PLAYBOOK,
+            CREATE_MINIAPP, LIST_MINIAPPS, DELETE_MINIAPP, OPEN_MINIAPP ->
+                com.bestrom.agent.brain.AutonomyLevel.FULL
+            else -> null
+        }
 
     private val BY_NAME: Map<String, Tool> = TOOLS.associateBy { it.name }
 
@@ -330,17 +751,19 @@ object ToolSchema {
             } catch (e: Exception) {
                 return Validation.Invalid("the arguments are not a JSON object")
             }
+        val source =
+            if (tool.name == CALL_FUNCTION) FunctionCatalog.normalizeFunctionArgs(raw) else raw
 
         val args = JSONObject()
         for (p in tool.params) {
-            if (!raw.has(p.name) || raw.isNull(p.name)) {
+            if (!source.has(p.name) || source.isNull(p.name)) {
                 if (p.required) return Validation.Invalid("$name needs ${p.name}")
                 continue
             }
             when (p.type) {
                 "integer" -> {
                     val v =
-                        raw.opt(p.name).let {
+                        source.opt(p.name).let {
                             when (it) {
                                 is Number -> it.toInt()
                                 is String -> it.toIntOrNull()
@@ -354,7 +777,7 @@ object ToolSchema {
                 }
                 "boolean" -> {
                     val v =
-                        raw.opt(p.name).let {
+                        source.opt(p.name).let {
                             when (it) {
                                 is Boolean -> it
                                 is String -> it.toBooleanStrictOrNull()
@@ -364,7 +787,7 @@ object ToolSchema {
                     args.put(p.name, v)
                 }
                 "string" -> {
-                    val v = raw.opt(p.name)
+                    val v = source.opt(p.name)
                     if (v !is String) return Validation.Invalid("${p.name} must be text")
                     if (p.enumValues != null && !p.enumValues.contains(v)) {
                         return Validation.Invalid(
@@ -374,7 +797,7 @@ object ToolSchema {
                     args.put(p.name, v)
                 }
                 "array" -> {
-                    val v = raw.optJSONArray(p.name)
+                    val v = source.optJSONArray(p.name)
                     if (v == null || v.length() != 2) {
                         return Validation.Invalid("${p.name} must be [x, y]")
                     }
@@ -392,7 +815,7 @@ object ToolSchema {
                     args.put(p.name, point)
                 }
                 "object" -> {
-                    val v = raw.optJSONObject(p.name)
+                    val v = source.optJSONObject(p.name)
                         ?: return Validation.Invalid("${p.name} must be an object")
                     args.put(p.name, v)
                 }
@@ -425,6 +848,130 @@ object ToolSchema {
             }
             LAUNCH_APP -> {
                 if (args.optString("package").isEmpty()) return "package must not be empty"
+            }
+            WAIT -> {
+                if (args.has("ms")) {
+                    val ms = args.optInt("ms")
+                    if (ms < MIN_WAIT_MS || ms > MAX_WAIT_MS) {
+                        return "ms must be between $MIN_WAIT_MS and $MAX_WAIT_MS"
+                    }
+                }
+            }
+            SCHEDULE_REMINDER -> {
+                val msg = com.bestrom.agent.schedule.ReminderTime.rejectText(args.optString("message"))
+                if (msg != null) return msg
+                return com.bestrom.agent.schedule.ReminderTime.rejectWhen(args)
+            }
+            SCHEDULE_TASK -> {
+                val msg = com.bestrom.agent.schedule.ReminderTime.rejectText(args.optString("goal"))
+                if (msg != null) return msg.replace("message", "goal")
+                return com.bestrom.agent.schedule.ReminderTime.rejectWhen(args)
+            }
+            CANCEL_REMINDER -> {
+                if (args.optString("id").isEmpty()) return "id must not be empty"
+            }
+            LOG_TAIL -> {
+                val tagErr = com.bestrom.agent.diag.LogLimits.rejectTag(args.optString("tag"))
+                if (tagErr != null) return tagErr
+            }
+            LOG_GREP -> {
+                val pErr = com.bestrom.agent.diag.LogLimits.rejectPattern(args.optString("pattern"))
+                if (pErr != null) return pErr
+                val tagErr = com.bestrom.agent.diag.LogLimits.rejectTag(args.optString("tag"))
+                if (tagErr != null) return tagErr
+            }
+            CRASH_SCAN -> {
+                if (args.has("max")) {
+                    val m = args.optInt("max")
+                    if (m < 1 || m > com.bestrom.agent.diag.LogLimits.MAX_CRASH_ENTRIES) {
+                        return "max must be between 1 and ${com.bestrom.agent.diag.LogLimits.MAX_CRASH_ENTRIES}"
+                    }
+                }
+            }
+            BATTERYSTATS_SNIPPET -> {
+                com.bestrom.agent.diag.BatterystatsLimits.rejectMode(args.optString("mode"))
+                    ?.let {
+                        return it
+                    }
+                return com.bestrom.agent.diag.BatterystatsLimits.rejectFocus(
+                    args.optString("focus")
+                )
+            }
+            OFFER_CHOICES -> {
+                if (args.optString("prompt").trim().isEmpty()) return "prompt must not be empty"
+                val raw = args.opt("options")
+                val arr =
+                    when (raw) {
+                        is org.json.JSONArray -> raw
+                        is String ->
+                            try {
+                                org.json.JSONArray(raw)
+                            } catch (_: Exception) {
+                                null
+                            }
+                        else -> null
+                    }
+                if (arr == null || arr.length() == 0) return "options must be a JSON array"
+                if (arr.length() > 6) return "at most 6 options"
+            }
+            CREATE_MINIAPP -> {
+                return com.bestrom.agent.miniapps.MiniAppLimits.rejectCreate(
+                    args.optString("name"),
+                    args.optString("kind"),
+                    args.optString("goal"),
+                    args.optString("unit"),
+                    com.bestrom.agent.miniapps.MiniAppLimits.parseItems(args.opt("items")),
+                    args.optInt("timer_minutes", 25),
+                )
+            }
+            DELETE_MINIAPP, OPEN_MINIAPP -> {
+                if (args.optString("id").isEmpty()) return "id must not be empty"
+            }
+            START_JOB -> {
+                com.bestrom.agent.jobs.JobLimits.rejectKind(args.optString("kind"))?.let {
+                    return it
+                }
+                com.bestrom.agent.jobs.JobLimits.rejectInterval(args.optInt("interval_minutes", -1))
+                    ?.let {
+                        return it
+                    }
+                com.bestrom.agent.jobs.JobLimits.rejectLabel(args.optString("label"))?.let {
+                    return it
+                }
+            }
+            STOP_JOB, DELETE_MACRO, RUN_MACRO -> {
+                if (args.optString("id").isEmpty()) return "id must not be empty"
+            }
+            RUN_PLAYBOOK -> {
+                com.bestrom.agent.playbook.PlaybookCatalog.rejectId(args.optString("id"))
+                    ?.let {
+                        return it
+                    }
+                val p =
+                    com.bestrom.agent.playbook.PlaybookCatalog.get(args.optString("id"))
+                        ?: return "unknown playbook id"
+                return com.bestrom.agent.playbook.PlaybookCatalog.rejectDetail(
+                    p,
+                    args.optString("detail"),
+                )
+            }
+            SAVE_MACRO -> {
+                com.bestrom.agent.macro.MacroLimits.rejectName(args.optString("name"))?.let {
+                    return it
+                }
+                com.bestrom.agent.macro.MacroLimits.rejectTrigger(args.optString("trigger"))?.let {
+                    return it
+                }
+                val steps = com.bestrom.agent.macro.MacroLimits.parseSteps(args.opt("steps"))
+                com.bestrom.agent.macro.MacroLimits.rejectSteps(steps)?.let {
+                    return it
+                }
+                return com.bestrom.agent.macro.MacroLimits.rejectSchedule(
+                    args.optString("trigger"),
+                    args.optInt("interval_minutes", 0),
+                    args.optLong("at_unix_ms", 0L),
+                    args.optInt("battery_below_pct", 0),
+                )
             }
             CALL_FUNCTION -> {
                 if (args.optString("package").isEmpty()) return "package must not be empty"
@@ -484,6 +1031,7 @@ object ToolSchema {
             }
             KEY -> out.put("name", call.args.optString("name"))
             LAUNCH_APP -> out.put("package", call.args.optString("package"))
+            LIST_APPS -> out.put("launchable_only", true)
             LIST_FUNCTIONS -> {
                 if (call.args.has("package")) out.put("package", call.args.optString("package"))
                 out.put("include_schema", true)
@@ -494,6 +1042,12 @@ object ToolSchema {
                 out.put("params", call.args.optJSONObject("params") ?: JSONObject())
             }
             SCREENSHOT -> out.put("encoding", "base64")
+            WAIT -> {
+                out.put(
+                    "ms",
+                    call.args.optInt("ms", DEFAULT_WAIT_MS).coerceIn(MIN_WAIT_MS, MAX_WAIT_MS),
+                )
+            }
         }
         // The confirm floor in Methods.dispatch is untouched: the runner has to
         // put this here, and it only does so after the policy engine allowed
@@ -519,7 +1073,12 @@ object ToolSchema {
             -32007 -> "too many actions too quickly"
             -32008 -> "there is no such element on screen"
             -32009 -> "the action did not take effect"
-            -32010 -> "the app function failed: $message"
+            -32010 ->
+                if (message.contains("not found", ignoreCase = true)) {
+                    "function not found — use an exact id from the catalogue, or drive the UI with launch_app/tap"
+                } else {
+                    "the app function failed: $message"
+                }
             -32011 -> "the screen changed; read it again"
             -32012 -> "refused: $message"
             -32013 -> "the screenshot was refused"

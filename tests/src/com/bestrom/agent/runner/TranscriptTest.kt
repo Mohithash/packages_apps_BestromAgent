@@ -201,4 +201,74 @@ class TranscriptTest {
                 .startsWith("data:image/png;base64,")
         )
     }
+
+    @Test
+    fun repairMovesUserMessagesOutOfAnOpenToolBlock() {
+        val broken =
+            listOf(
+                ChatMessage(ChatMessage.USER, "goal"),
+                ChatMessage(
+                    ChatMessage.ASSISTANT,
+                    null,
+                    listOf(
+                        ChatMessage.Call("c1", "launch_app", "{}"),
+                        ChatMessage.Call("c2", "read_screen", "{}"),
+                    ),
+                ),
+                ChatMessage(ChatMessage.TOOL, "opened", toolCallId = "c1"),
+                // Image / hint landed too early — classic HTTP 400 cause.
+                ChatMessage(ChatMessage.USER, "hint"),
+                ChatMessage(ChatMessage.TOOL, "screen", toolCallId = "c2"),
+            )
+        val fixed = Transcript().repairToolPairs(broken)
+        val roles = fixed.map { it.role }
+        assertEquals(
+            listOf(
+                ChatMessage.USER,
+                ChatMessage.ASSISTANT,
+                ChatMessage.TOOL,
+                ChatMessage.TOOL,
+                ChatMessage.USER,
+            ),
+            roles,
+        )
+        assertEquals("hint", fixed.last().content)
+    }
+
+    @Test
+    fun repairFillsMissingToolRepliesAndDropsOrphanIds() {
+        val broken =
+            listOf(
+                ChatMessage(
+                    ChatMessage.ASSISTANT,
+                    null,
+                    listOf(ChatMessage.Call("c1", "wait", "{}")),
+                ),
+                ChatMessage(ChatMessage.TOOL, "waited", toolCallId = "c1"),
+                // Old bug: fake id after wait.
+                ChatMessage(ChatMessage.TOOL, "screen", toolCallId = "c1:screen"),
+            )
+        val fixed = Transcript().repairToolPairs(broken)
+        assertEquals(2, fixed.size)
+        assertEquals("c1", fixed[1].toolCallId)
+        assertTrue(fixed.none { it.toolCallId == "c1:screen" })
+    }
+
+    @Test
+    fun repairSynthesisesInterruptedWhenToolsNeverAnswered() {
+        val broken =
+            listOf(
+                ChatMessage(
+                    ChatMessage.ASSISTANT,
+                    null,
+                    listOf(ChatMessage.Call("c1", "tap", "{}")),
+                ),
+                ChatMessage(ChatMessage.USER, "keep going"),
+            )
+        val fixed = Transcript().repairToolPairs(broken)
+        assertEquals(ChatMessage.TOOL, fixed[1].role)
+        assertEquals("c1", fixed[1].toolCallId)
+        assertEquals("interrupted", fixed[1].content)
+        assertEquals("keep going", fixed[2].content)
+    }
 }

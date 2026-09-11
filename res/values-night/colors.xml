@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 The BestROM Project
+     Licensed under the Apache License, Version 2.0
+-->
+<resources>
+    <color name="agent_bg">#FF070A09</color>
+    <color name="agent_surface">#FF121816</color>
+    <color name="agent_surface_variant">#FF1A221F</color>
+    <color name="agent_on_surface">#FFE8F0EC</color>
+    <color name="agent_on_surface_muted">#FF8FA399</color>
+    <color name="agent_outline">#FF2A3531</color>
+    <color name="agent_user_bubble">#FFCCFBF1</color>
+    <color name="agent_user_text">#FF0E1412</color>
+    <color name="agent_assistant_bubble">#FF1A221F</color>
+    <color name="agent_tool_text">#FF8FA399</color>
+    <color name="agent_accent">#FF2DD4BF</color>
+    <color name="agent_accent_soft">#FF134E4A</color>
+    <color name="agent_send_bg">#FF2DD4BF</color>
+    <color name="agent_send_fg">#FF0E1412</color>
+    <color name="agent_stop_bg">#FFF04438</color>
+    <color name="agent_composer_bg">#FF121816</color>
+    <color name="agent_status_ok">#FF2DD4BF</color>
+    <color name="agent_status_warn">#FFFDB022</color>
+    <color name="agent_status_bad">#FFF97066</color>
+    <color name="agent_icon_bg">#FF070A09</color>
+    <color name="agent_code_bg">#FF24302C</color>
+    <color name="agent_code_fg">#FFB7D0C6</color>
+</resources>

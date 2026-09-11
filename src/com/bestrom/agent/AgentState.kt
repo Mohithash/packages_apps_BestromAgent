@@ -19,6 +19,7 @@ package com.bestrom.agent
 
 import com.bestrom.agent.a11y.AgentAccessibilityService
 import com.bestrom.agent.bridge.AgentBridgeService
+import com.bestrom.agent.runner.PendingChoice
 import com.bestrom.agent.runner.PendingConfirm
 import com.bestrom.agent.runner.StepEvent
 import com.bestrom.agent.runner.Task
@@ -89,6 +90,17 @@ object AgentState {
     @Volatile
     var confirm: PendingConfirm? = null
 
+    /** A multi-choice sheet (offer_choices), or null. */
+    @Volatile
+    var choice: PendingChoice? = null
+
+    /**
+     * Set when the agent is about to open another app. The chat activity
+     * enters picture-in-picture so the task UI is not buried under the target.
+     * Cleared when PiP starts or the task ends.
+     */
+    val keepVisible = AtomicBoolean(false)
+
     /** How many step lines the task screen keeps. Nothing is persisted. */
     const val MAX_STEPS = 300
 
@@ -129,5 +141,7 @@ object AgentState {
         pairingCooldownUntilMs = 0
         task = null
         confirm = null
+        choice = null
+        keepVisible.set(false)
     }
 }

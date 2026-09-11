@@ -18,6 +18,7 @@
 package com.bestrom.agent.runner
 
 import com.bestrom.agent.brain.ChatMessage
+import java.util.LinkedHashSet
 
 /**
  * The messages sent to the model, and what is dropped from them as they age.
@@ -153,6 +154,67 @@ class Transcript {
                 else -> out.add(entry.message)
             }
         }
+        // Providers answer HTTP 400 if a user/image lands between an
+        // assistant tool_calls block and its tool replies, or if a tool
+        // reply id is unknown. Repair before the wire.
+        return repairToolPairs(out)
+    }
+
+    /**
+     * OpenAI-compatible rule: after assistant+tool_calls, only tool messages
+     * for those ids may follow until every id is answered. Anything else is
+     * held; missing replies are filled; orphan tool ids are dropped.
+     */
+    fun repairToolPairs(messages: List<ChatMessage>): List<ChatMessage> {
+        val out = ArrayList<ChatMessage>(messages.size + 4)
+        var pending: LinkedHashSet<String>? = null
+        val held = ArrayList<ChatMessage>()
+
+        fun closePending() {
+            val open = pending ?: return
+            for (id in open) {
+                out.add(ChatMessage(ChatMessage.TOOL, "interrupted", toolCallId = id))
+            }
+            pending = null
+            out.addAll(held)
+            held.clear()
+        }
+
+        for (m in messages) {
+            val calls = m.toolCalls
+            if (m.role == ChatMessage.ASSISTANT && !calls.isNullOrEmpty()) {
+                closePending()
+                out.add(m)
+                pending = LinkedHashSet(calls.map { it.id })
+                continue
+            }
+            val open = pending
+            if (open == null) {
+                // A tool reply with no open assistant block is an orphan (e.g.
+                // the old wait "id:screen" second message after the real reply).
+                if (m.role != ChatMessage.TOOL) out.add(m)
+                continue
+            }
+            if (m.role == ChatMessage.TOOL) {
+                val id = m.toolCallId
+                if (id != null && open.remove(id)) {
+                    out.add(m)
+                    if (open.isEmpty()) {
+                        pending = null
+                        out.addAll(held)
+                        held.clear()
+                    }
+                }
+                // Unknown tool_call_id: drop (e.g. old "id:screen" mistake).
+                continue
+            }
+            // User / plain assistant / image while tools are still open.
+            held.add(m)
+            if (m.role == ChatMessage.ASSISTANT) {
+                closePending()
+            }
+        }
+        closePending()
         return out
     }
 

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 The BestROM Project
+     Licensed under the Apache License, Version 2.0
+-->
+<!-- Agent surfaces: ink + teal pulse. No purple. -->
+<resources>
+    <color name="agent_bg">#FFF4F5F4</color>
+    <color name="agent_surface">#FFFFFFFF</color>
+    <color name="agent_surface_variant">#FFE8EBE9</color>
+    <color name="agent_on_surface">#FF0E1412</color>
+    <color name="agent_on_surface_muted">#FF5C6B64</color>
+    <color name="agent_outline">#FFD2DBD6</color>
+    <color name="agent_user_bubble">#FF0E1412</color>
+    <color name="agent_user_text">#FFF4F5F4</color>
+    <color name="agent_assistant_bubble">#FFE8EBE9</color>
+    <color name="agent_tool_text">#FF5C6B64</color>
+    <color name="agent_accent">#FF0F766E</color>
+    <color name="agent_accent_soft">#FFCCFBF1</color>
+    <color name="agent_send_bg">#FF0F766E</color>
+    <color name="agent_send_fg">#FFFFFFFF</color>
+    <color name="agent_stop_bg">#FFB42318</color>
+    <color name="agent_composer_bg">#FFFFFFFF</color>
+    <color name="agent_status_ok">#FF0F766E</color>
+    <color name="agent_status_warn">#FFB54708</color>
+    <color name="agent_status_bad">#FFB42318</color>
+    <color name="agent_icon_bg">#FF0E1412</color>
+    <color name="agent_code_bg">#FFD8E0DC</color>
+    <color name="agent_code_fg">#FF1A2E28</color>
+</resources>

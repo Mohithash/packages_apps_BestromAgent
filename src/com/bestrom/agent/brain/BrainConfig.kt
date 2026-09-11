@@ -117,12 +117,12 @@ enum class BrainPreset(
         local = true,
     ),
     CUSTOM(
-        "Custom",
-        "",
-        emptyList(),
+        "OpenAI-compatible",
+        "https://api.openai.com/v1",
+        listOf("gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"),
         "max_tokens",
         true,
-        false,
+        true,
         true,
     );
 
@@ -144,7 +144,8 @@ data class BrainConfig(
     /** Anthropic only, and only when the key can see more than one workspace. */
     val workspaceId: String = "",
     val screenshots: Boolean = false,
-    val autonomous: Boolean = false,
+    /** How far tools may go without asking; see [AutonomyLevel]. */
+    val autonomy: AutonomyLevel = AutonomyLevel.TASK,
     val stepCap: Int = DEFAULT_STEP_CAP,
     val tokenCap: Int = DEFAULT_TOKEN_CAP,
 ) {

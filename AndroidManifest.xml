@@ -21,13 +21,15 @@
   AccessibilityManagerService never scans this app and nothing binds it. The
   settings activity is enabled because it is the door - an activity nobody
   starts costs nothing, holds no binding and starts no process. There is
-  deliberately no <receiver>, no BOOT_COMPLETED, no JobService, no
-  NotificationListenerService and no <provider> anywhere in this file.
+  deliberately no JobService, no NotificationListenerService and no
+  <provider> anywhere in this file.   The receivers are ReminderReceiver (local reminders) and BackgroundReceiver
+  (jobs + macros). Neither turns Agent mode on.
 
   INTERNET is here for exactly one class, brain/OpenAiCompatClient. It is a
-  normal permission, granted at install, so the privileged allowlist is
-  unchanged and still holds two entries. The adb bridge itself is still a unix
-  abstract socket with no address outside the device.
+  normal permission, granted at install, so the privileged allowlist holds
+  EXECUTE_APP_FUNCTIONS, WRITE_SECURE_SETTINGS, READ_LOGS, DUMP and
+  PACKAGE_USAGE_STATS. The adb bridge
+  itself is still a unix abstract socket with no address outside the device.
 
   networkSecurityConfig is what lets the two LAN presets connect at all; the
   file says why it permits cleartext and where the address rule really lives.
@@ -45,6 +47,9 @@
     <!-- privapp allowlist: rom/privapp-permissions-com.bestrom.agent.xml -->
     <uses-permission android:name="android.permission.EXECUTE_APP_FUNCTIONS" />
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+    <uses-permission android:name="android.permission.READ_LOGS" />
+    <uses-permission android:name="android.permission.DUMP" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
 
     <!-- normal / signature, no allowlist entry -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -52,23 +57,23 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@drawable/ic_launcher_agent"
         android:label="@string/app_name"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:roundIcon="@drawable/ic_launcher_agent"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.DeviceDefault.Settings">
+        android:theme="@style/Theme.BestromAgent">
 
-        <!-- No MAIN/LAUNCHER filter and no intent-filter at all: the Powerhub
-             preference names this component explicitly, so nothing needs one.
-             Exported, because a component in another app cannot be started
-             otherwise, but behind WRITE_SECURE_SETTINGS - Settings holds it,
-             an installed app does not. The switch on this screen enables a
-             service that reads the screen and taps it, which is exactly the
-             tap an overlay would want to steal, so the root view also sets
-             filterTouchesWhenObscured. -->
+        <!-- Settings / pairing / audit. Still reachable from Powerhub and the
+             chat menu. WRITE_SECURE_SETTINGS so only Settings (and this app)
+             can open it from outside. -->
         <activity
             android:name=".ui.AgentSettingsActivity"
             android:enabled="true"
@@ -76,24 +81,16 @@
             android:launchMode="singleTop"
             android:permission="android.permission.WRITE_SECURE_SETTINGS"
             android:taskAffinity=""
-            android:label="@string/agent_title" />
+            android:label="@string/agent_title"
+            android:theme="@style/Theme.BestromAgent" />
 
-        <!-- The task screen, and the assistant entry.
+        <!-- Homescreen chat + digital assistant entry.
 
-             exported="true" and the DEFAULT category are both load bearing:
-             AssistantRoleBehavior.getQualifyingPackagesInternal() queries with
-             MATCH_DEFAULT_ONLY and skips an activity whose exported flag is
-             false, so miss either and the app simply never appears under
-             Default apps > Digital assistant, which looks like a platform bug.
+             MAIN/LAUNCHER puts BestROM Agent on the launcher. ASSIST keeps it
+             as a Default apps > Digital assistant candidate.
 
-             It carries NO android:permission. Copying the settings activity's
-             WRITE_SECURE_SETTINGS guard here happens to work today, because
-             SystemUI holds that permission, but it would make the whole
-             gesture depend on a coincidence.
-
-             Anything on the device can send ACTION_ASSIST, so the activity
-             reads none of what it is handed: no extras, no data, no clipboard.
-             A task only ever starts from text typed into the field. -->
+             exported="true" and DEFAULT are both load bearing for ASSIST.
+             It reads none of what it is handed: no extras, no data, no clipboard. -->
         <activity
             android:name=".ui.AgentTaskActivity"
             android:enabled="true"
@@ -101,7 +98,15 @@
             android:launchMode="singleTask"
             android:taskAffinity=""
             android:label="@string/agent_task_title"
-            android:theme="@android:style/Theme.DeviceDefault.Settings">
+            android:theme="@style/Theme.BestromAgent.Chat"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.ASSIST" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -117,7 +122,67 @@
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:label="@string/brain_title"
-            android:theme="@android:style/Theme.DeviceDefault.Settings" />
+            android:theme="@style/Theme.BestromAgent" />
+
+        <activity
+            android:name=".miniapps.WaterTrackerActivity"
+            android:enabled="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:label="@string/water_title"
+            android:theme="@style/Theme.BestromAgent" />
+
+        <activity
+            android:name=".miniapps.WeightTrackerActivity"
+            android:enabled="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:label="@string/weight_title"
+            android:theme="@style/Theme.BestromAgent" />
+
+        <activity
+            android:name=".miniapps.RecipeMiniAppActivity"
+            android:enabled="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:label="@string/miniapp_recipe_title"
+            android:theme="@style/Theme.BestromAgent" />
+
+        <receiver
+            android:name=".miniapps.WaterWidgetProvider"
+            android:exported="true"
+            android:label="@string/water_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/water_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".miniapps.WeightWidgetProvider"
+            android:exported="true"
+            android:label="@string/weight_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/weight_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".miniapps.RecipeWidgetProvider"
+            android:exported="true"
+            android:label="@string/miniapp_recipe_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/recipe_widget_info" />
+        </receiver>
 
         <service
             android:name=".bridge.AgentBridgeService"
@@ -142,11 +207,38 @@
                 android:resource="@xml/agent_accessibility_service" />
         </service>
 
+        <!-- Local reminders / deferred goals only. Does not enable Agent mode. -->
+        <receiver
+            android:name=".schedule.ReminderReceiver"
+            android:exported="false"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="com.bestrom.agent.action.REMINDER_FIRE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Background jobs + macros. Does not enable Agent mode. -->
+        <receiver
+            android:name=".jobs.BackgroundReceiver"
+            android:exported="false"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="com.bestrom.agent.action.JOB_FIRE" />
+                <action android:name="com.bestrom.agent.action.MACRO_FIRE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BATTERY_LOW" />
+                <action android:name="android.intent.action.BATTERY_OKAY" />
+            </intent-filter>
+        </receiver>
+
         <!--
              androidx.recyclerview drags in profileinstaller, whose manifest adds a
              ContentProvider that runs at process start and an exported receiver.
              Both are stripped here so the merged manifest keeps its promise: no
-             provider and no receiver ship in this APK. tools:node is a merger
+             provider and no profileinstaller receiver ship in this APK. tools:node is a merger
              directive, not a component - the merged manifest has neither element.
         -->
         <provider

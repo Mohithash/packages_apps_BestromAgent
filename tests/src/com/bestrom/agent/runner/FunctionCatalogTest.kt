@@ -64,10 +64,34 @@ class FunctionCatalogTest {
         val lines = FunctionCatalog.lines(list(setDeviceState()))
         assertEquals(1, lines.size)
         assertEquals(
-            "com.android.settings/setDeviceStateItem - Set a device state item - " +
+            "package=com.android.settings function=setDeviceStateItem - Set a device state item - " +
                 "params: key(string), value(boolean) optional",
             lines[0],
         )
+    }
+
+    @Test
+    fun normalizeSplitsQualifiedFunctionId() {
+        val args =
+            FunctionCatalog.normalizeFunctionArgs(
+                JSONObject()
+                    .put("package", "com.android.settings")
+                    .put("function", "com.android.settings/setDeviceStateItem"),
+            )
+        assertEquals("com.android.settings", args.getString("package"))
+        assertEquals("setDeviceStateItem", args.getString("function"))
+    }
+
+    @Test
+    fun normalizeAcceptsFunctionIdAlias() {
+        val args =
+            FunctionCatalog.normalizeFunctionArgs(
+                JSONObject()
+                    .put("package", "com.android.settings")
+                    .put("function_id", "setDeviceStateItem"),
+            )
+        assertEquals("setDeviceStateItem", args.getString("function"))
+        assertFalse(args.has("function_id"))
     }
 
     @Test
@@ -118,7 +142,7 @@ class FunctionCatalogTest {
         val one = FunctionCatalog.lines(list(a, b))
         val other = FunctionCatalog.lines(list(b, a))
         assertEquals(one, other)
-        assertTrue(one[0].startsWith("com.android.alarm/"))
+        assertTrue(one[0].startsWith("package=com.android.alarm "))
     }
 
     @Test

@@ -256,11 +256,22 @@ class AppFunctionsClient(
     private fun encodeStaticDocument(document: GenericDocument, includeSchema: Boolean): JSONObject {
         val flattened = documentToJson(document, collapseSingles = false)
         val packageName = firstString(flattened, AppFunctionStaticMetadataHelper.PROPERTY_PACKAGE_NAME)
-        val functionId = firstString(flattened, AppFunctionStaticMetadataHelper.PROPERTY_FUNCTION_ID)
+        var functionId = firstString(flattened, AppFunctionStaticMetadataHelper.PROPERTY_FUNCTION_ID)
+        if (functionId.isNullOrEmpty()) {
+            functionId = document.id
+        }
+        // document.id is often "package/function".
+        if (!packageName.isNullOrEmpty() && functionId != null) {
+            val prefix = "$packageName/"
+            if (functionId.startsWith(prefix)) {
+                functionId = functionId.substring(prefix.length)
+            }
+        }
         val out =
             JSONObject()
                 .put("package", packageName ?: "")
-                .put("function_id", functionId ?: document.id)
+                .put("function_id", functionId ?: "")
+
                 .put(
                     "enabled",
                     firstValue(

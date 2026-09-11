@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 The BestROM Project
+     Licensed under the Apache License, Version 2.0
+-->
+<!-- Fallback launcher icon for pre-O and non-adaptive launchers. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_launcher_background" />
+    <item
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:gravity="center" />
+</layer-list>

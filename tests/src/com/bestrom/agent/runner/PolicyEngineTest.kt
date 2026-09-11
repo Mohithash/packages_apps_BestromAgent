@@ -40,9 +40,10 @@ class PolicyEngineTest {
 
     private fun engine(
         goal: String = "turn on battery saver",
-        autonomous: Boolean = false,
+        autonomy: com.bestrom.agent.brain.AutonomyLevel =
+            com.bestrom.agent.brain.AutonomyLevel.ASSIST,
         excluded: Set<String> = emptySet(),
-    ) = PolicyEngine(goal, apps, excluded, autonomous)
+    ) = PolicyEngine(goal, apps, excluded, autonomy)
 
     private fun call(name: String, args: String, vision: Boolean = false): ToolSchema.ToolCall {
         val v = ToolSchema.validate("c1", name, args, vision)
@@ -126,8 +127,8 @@ class PolicyEngineTest {
     @Test
     fun readsAreNeverConfirmedUnderEitherPolicy() {
         val screen = screen("com.android.settings")
-        for (autonomous in listOf(false, true)) {
-            val engine = engine(autonomous = autonomous)
+        for (autonomy in listOf(com.bestrom.agent.brain.AutonomyLevel.ASSIST, com.bestrom.agent.brain.AutonomyLevel.TASK)) {
+            val engine = engine(autonomy = autonomy)
             for (call in
                 listOf(
                     call(ToolSchema.READ_SCREEN, "{}"),
@@ -162,26 +163,36 @@ class PolicyEngineTest {
 
         assertTrue(asking.decide(tap, screen, true) is PolicyEngine.Decision.Allow)
         assertTrue(
-            engine(autonomous = true).decide(tap, screen, false) is PolicyEngine.Decision.Allow
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.TASK).decide(tap, screen, false) is PolicyEngine.Decision.Allow
         )
     }
 
     @Test
-    fun everyActionOnASettingsScreenAsksEveryTime() {
-        // Autonomous and Allow all both stop at the door of a screen that can
-        // write a secure setting.
+    fun settingsUiFollowsAutonomyWhileCallFunctionStillAsks() {
+        // UI in Settings is MUTATE: Task+ skips the sheet; Assist still asks.
+        // Writing a secure setting via call_function stays ALWAYS_CONFIRM.
         val screen = screen("com.android.settings")
-        val engine = engine(autonomous = true)
-        for (call in
-            listOf(
-                call(ToolSchema.TAP, """{"x":10,"y":20}"""),
-                call(ToolSchema.SWIPE, """{"from":[10,90],"to":[10,10]}"""),
-            )) {
-            assertEquals(call.name, PolicyEngine.Tier.ALWAYS_CONFIRM, engine.tier(call, screen))
-            val decision = engine.decide(call, screen, true)
-            assertTrue(call.name, decision is PolicyEngine.Decision.NeedsConfirm)
-            assertTrue(call.name, (decision as PolicyEngine.Decision.NeedsConfirm).sensitive)
+        val tap = call(ToolSchema.TAP, """{"x":10,"y":20}""")
+        val swipe = call(ToolSchema.SWIPE, """{"from":[10,90],"to":[10,10]}""")
+        for (call in listOf(tap, swipe)) {
+            assertEquals(call.name, PolicyEngine.Tier.MUTATE, engine().tier(call, screen))
+            assertTrue(
+                call.name,
+                engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.TASK)
+                    .decide(call, screen, false) is PolicyEngine.Decision.Allow,
+            )
+            assertTrue(
+                call.name,
+                engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.ASSIST)
+                    .decide(call, screen, false) is PolicyEngine.Decision.NeedsConfirm,
+            )
         }
+        val write = settings("setDeviceStateItem", "low_power")
+        assertEquals(PolicyEngine.Tier.ALWAYS_CONFIRM, engine().tier(write, null))
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.FULL)
+                .decide(write, null, true) is PolicyEngine.Decision.NeedsConfirm,
+        )
     }
 
     @Test
@@ -230,11 +241,11 @@ class PolicyEngineTest {
                 "usb_debugging",
             )) {
             val call = settings("setDeviceStateItem", key)
-            for (autonomous in listOf(false, true)) {
+            for (autonomy in listOf(com.bestrom.agent.brain.AutonomyLevel.ASSIST, com.bestrom.agent.brain.AutonomyLevel.TASK)) {
                 for (allowAll in listOf(false, true)) {
-                    val decision = engine(autonomous = autonomous).decide(call, null, allowAll)
+                    val decision = engine(autonomy = autonomy).decide(call, null, allowAll)
                     assertTrue(
-                        "$key was not refused (autonomous=$autonomous allowAll=$allowAll)",
+                        "$key was not refused (autonomy=$autonomy allowAll=$allowAll)",
                         decision is PolicyEngine.Decision.Refuse,
                     )
                 }
@@ -268,7 +279,7 @@ class PolicyEngineTest {
             )
         assertEquals(PolicyEngine.Tier.FORBIDDEN, engine().tier(call, null))
         assertTrue(
-            engine(goal = "open com.bestrom.agent", autonomous = true)
+            engine(goal = "open com.bestrom.agent", autonomy = com.bestrom.agent.brain.AutonomyLevel.TASK)
                 .decide(call(ToolSchema.LAUNCH_APP, """{"package":"com.bestrom.agent"}"""), null, true)
                 is PolicyEngine.Decision.Refuse
         )
@@ -292,12 +303,12 @@ class PolicyEngineTest {
         val type = call(ToolSchema.TYPE, """{"text":"1234","node_id":0}""")
         for ((label, resId) in rows) {
             val screen = row("com.android.settings", label, resId)
-            for (autonomous in listOf(false, true)) {
+            for (autonomy in listOf(com.bestrom.agent.brain.AutonomyLevel.ASSIST, com.bestrom.agent.brain.AutonomyLevel.TASK)) {
                 for (allowAll in listOf(false, true)) {
                     for (call in listOf(tap, type)) {
-                        val decision = engine(autonomous = autonomous).decide(call, screen, allowAll)
+                        val decision = engine(autonomy = autonomy).decide(call, screen, allowAll)
                         assertTrue(
-                            "$label ${call.name} (autonomous=$autonomous allowAll=$allowAll)",
+                            "$label ${call.name} (autonomy=$autonomy allowAll=$allowAll)",
                             decision is PolicyEngine.Decision.Refuse,
                         )
                     }
@@ -305,12 +316,12 @@ class PolicyEngineTest {
             }
             assertEquals(label, PolicyEngine.Tier.FORBIDDEN, engine().tier(tap, screen))
         }
-        // An ordinary Settings row is not refused; it asks.
+        // An ordinary Settings row is not refused; it is MUTATE (Task+ skips).
         val ordinary = row("com.android.settings", "Battery saver", "switch_widget")
-        assertEquals(PolicyEngine.Tier.ALWAYS_CONFIRM, engine().tier(tap, ordinary))
+        assertEquals(PolicyEngine.Tier.MUTATE, engine().tier(tap, ordinary))
         // And "Clock" is not "lock".
         val clock = row("com.android.settings", "Clock", "clock_row")
-        assertEquals(PolicyEngine.Tier.ALWAYS_CONFIRM, engine().tier(tap, clock))
+        assertEquals(PolicyEngine.Tier.MUTATE, engine().tier(tap, clock))
     }
 
     @Test
@@ -327,7 +338,7 @@ class PolicyEngineTest {
                 call(ToolSchema.SWIPE, """{"from":[10,90],"to":[10,10]}"""),
             )) {
             assertEquals(call.name, PolicyEngine.Tier.FORBIDDEN, engine().tier(call, screen))
-            val decision = engine(autonomous = true).decide(call, screen, true)
+            val decision = engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.TASK).decide(call, screen, true)
             assertTrue(call.name, decision is PolicyEngine.Decision.Refuse)
         }
     }
@@ -384,7 +395,7 @@ class PolicyEngineTest {
     @Test
     fun namingThePaymentAppMakesItAskEveryTimeInstead() {
         for (goal in listOf("open Aurora Bank and read the balance", "open com.example.bank")) {
-            val engine = engine(goal = goal, autonomous = true)
+            val engine = engine(goal = goal, autonomy = com.bestrom.agent.brain.AutonomyLevel.TASK)
             val open = call(ToolSchema.LAUNCH_APP, """{"package":"com.example.bank"}""")
             assertEquals(goal, PolicyEngine.Tier.ALWAYS_CONFIRM, engine.tier(open, null))
             // Autonomous does not cover it, and neither does allow-all.
@@ -402,10 +413,22 @@ class PolicyEngineTest {
                 PolicyEngine.AppFacts("com.example.paylater", "Pay", billing = true),
                 PolicyEngine.AppFacts("com.example.bank", "Aurora Bank", hce = true),
             )
-        val engine = PolicyEngine("pay the bill", apps, emptySet(), false)
+        val engine =
+            PolicyEngine(
+                "pay the bill",
+                apps,
+                emptySet(),
+                com.bestrom.agent.brain.AutonomyLevel.ASSIST,
+            )
         assertFalse(engine.named.contains("com.example.paylater"))
         // Two tokens, or the package name itself, still name it.
-        val named = PolicyEngine("open Aurora Bank", apps, emptySet(), false)
+        val named =
+            PolicyEngine(
+                "open Aurora Bank",
+                apps,
+                emptySet(),
+                com.bestrom.agent.brain.AutonomyLevel.ASSIST,
+            )
         assertTrue(named.named.contains("com.example.bank"))
     }
 
@@ -429,9 +452,10 @@ class PolicyEngineTest {
     }
 
     @Test
-    fun aBillingOrTapToPayAppIsSensitiveWithoutBeingOnAnyList() {
+    fun aTapToPayAppIsSensitiveWithoutBeingOnAnyList() {
         val engine = engine()
-        assertTrue(engine.isSensitive("com.example.shop"))
+        // Billing alone is not sensitive (checkout phrases cover Place order).
+        assertFalse(engine.isSensitive("com.example.shop"))
         assertTrue(engine.isSensitive("com.example.bank"))
         assertTrue(engine.isSensitive("com.google.android.apps.walletnfcrel"))
         assertFalse(engine.isSensitive("com.android.settings"))
@@ -441,7 +465,7 @@ class PolicyEngineTest {
     @Test
     fun actingInsideASensitiveAppAlwaysAsksEvenWithAllowAllSet() {
         val screen = screen("com.example.bank")
-        val engine = engine(goal = "open Aurora Bank", autonomous = true)
+        val engine = engine(goal = "open Aurora Bank", autonomy = com.bestrom.agent.brain.AutonomyLevel.TASK)
         for (call in
             listOf(
                 call(ToolSchema.TAP, """{"node_id":0}"""),
@@ -471,7 +495,7 @@ class PolicyEngineTest {
         val screen = screen("com.example.notes")
         val call = call(ToolSchema.TYPE, """{"text":"1234","node_id":1}""")
         assertEquals(PolicyEngine.Tier.FORBIDDEN, engine().tier(call, screen))
-        val refusal = engine(autonomous = true).decide(call, screen, true)
+        val refusal = engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.TASK).decide(call, screen, true)
         assertTrue(refusal is PolicyEngine.Decision.Refuse)
         assertTrue((refusal as PolicyEngine.Decision.Refuse).reason.contains("password field"))
         // The same text into the ordinary field is only a confirm.
@@ -510,6 +534,138 @@ class PolicyEngineTest {
         assertEquals(
             engine.describe(a, screen).first,
             engine.describe(b, screen).first,
+        )
+    }
+
+    @Test
+    fun maintainerToolsNeedAutonomyFloor() {
+        val log = call(ToolSchema.LOG_TAIL, """{"lines":40}""")
+        val stats = call(ToolSchema.BATTERYSTATS_SNIPPET, """{"mode":"full"}""")
+        val drain = call(ToolSchema.MEASURE_IDLE_DRAIN, "{}")
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.TASK).decide(log, null, true)
+                is PolicyEngine.Decision.Refuse,
+        )
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.BACKGROUND)
+                .decide(drain, null, true) is PolicyEngine.Decision.Allow,
+        )
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.MAINTAINER)
+                .decide(log, null, true) is PolicyEngine.Decision.Allow,
+        )
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.MAINTAINER)
+                .decide(stats, null, true) is PolicyEngine.Decision.Allow,
+        )
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.BACKGROUND)
+                .decide(log, null, true) is PolicyEngine.Decision.Refuse,
+        )
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.BACKGROUND)
+                .decide(stats, null, true) is PolicyEngine.Decision.Refuse,
+        )
+        val job = call(ToolSchema.START_JOB, """{"kind":"idle_drain","interval_minutes":30}""")
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.TASK).decide(job, null, true)
+                is PolicyEngine.Decision.Refuse,
+        )
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.BACKGROUND)
+                .decide(job, null, true) is PolicyEngine.Decision.Allow,
+        )
+        val macro =
+            call(
+                ToolSchema.SAVE_MACRO,
+                """{"name":"x","trigger":"boot","steps":"[{\"tool\":\"notify\",\"args\":{\"message\":\"hi\"}}]"}""",
+            )
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.MAINTAINER)
+                .decide(macro, null, true) is PolicyEngine.Decision.Refuse,
+        )
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.FULL)
+                .decide(macro, null, true) is PolicyEngine.Decision.Allow,
+        )
+        val playbook =
+            call(ToolSchema.RUN_PLAYBOOK, """{"id":"share_screen_summary"}""")
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.MAINTAINER)
+                .decide(playbook, null, true) is PolicyEngine.Decision.Refuse,
+        )
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.FULL)
+                .decide(playbook, null, true) is PolicyEngine.Decision.Allow,
+        )
+    }
+
+    @Test
+    fun checkoutControlsAlwaysConfirmEvenOnOrdinaryApps() {
+        val placeOrder = row("com.example.food", "Place order", "btn_place_order")
+        val payNow = row("com.example.shop", "Pay now", "checkout_pay")
+        val addToCart = row("com.example.food", "Add to cart", "btn_add")
+        val tap = call(ToolSchema.TAP, """{"node_id":0}""")
+        for (screen in listOf(placeOrder, payNow)) {
+            assertEquals(
+                PolicyEngine.Tier.ALWAYS_CONFIRM,
+                engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.FULL).tier(tap, screen),
+            )
+            val decision =
+                engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.FULL)
+                    .decide(tap, screen, allowAllForThisTask = true)
+            assertTrue(decision is PolicyEngine.Decision.NeedsConfirm)
+            assertTrue((decision as PolicyEngine.Decision.NeedsConfirm).sensitive)
+        }
+        // Ordinary cart action stays MUTATE (confirm only when Assist).
+        assertEquals(
+            PolicyEngine.Tier.MUTATE,
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.FULL).tier(tap, addToCart),
+        )
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.FULL)
+                .decide(tap, addToCart, true) is PolicyEngine.Decision.Allow,
+        )
+    }
+
+    @Test
+    fun autoSkipsNonPaymentAlwaysConfirmButNotWallets() {
+        val write = settings("setDeviceStateItem", "low_power")
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.AUTO)
+                .decide(write, null, false) is PolicyEngine.Decision.Allow,
+        )
+        val bank =
+            engine(goal = "open Aurora Bank", autonomy = com.bestrom.agent.brain.AutonomyLevel.AUTO)
+        val tap = call(ToolSchema.TAP, """{"node_id":0}""")
+        assertTrue(
+            bank.decide(tap, screen("com.example.bank"), true) is PolicyEngine.Decision.NeedsConfirm,
+        )
+        val placeOrder = row("com.example.food", "Place order", "btn_place_order")
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.AUTO)
+                .decide(tap, placeOrder, true) is PolicyEngine.Decision.NeedsConfirm,
+        )
+    }
+
+    @Test
+    fun bypassSkipsEveryConfirmButStillRefusesForbidden() {
+        val write = settings("setDeviceStateItem", "low_power")
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.BYPASS)
+                .decide(write, null, false) is PolicyEngine.Decision.Allow,
+        )
+        val bank =
+            engine(
+                goal = "open Aurora Bank",
+                autonomy = com.bestrom.agent.brain.AutonomyLevel.BYPASS,
+            )
+        val tap = call(ToolSchema.TAP, """{"node_id":0}""")
+        assertTrue(bank.decide(tap, screen("com.example.bank"), false) is PolicyEngine.Decision.Allow)
+        val lock = row("com.android.settings", "Screen lock", "screen_lock")
+        assertTrue(
+            engine(autonomy = com.bestrom.agent.brain.AutonomyLevel.BYPASS)
+                .decide(tap, lock, true) is PolicyEngine.Decision.Refuse,
         )
     }
 

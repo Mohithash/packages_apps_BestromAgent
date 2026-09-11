@@ -57,6 +57,58 @@ object FunctionCatalog {
             9 to "pending intent",
         )
 
+    /**
+     * Normalise package + function id the model may have mangled.
+     *
+     * Catalogue lines look like `package=com.android.settings function=…`.
+     * Models often put `pkg/id` in `function`, or send `function_id` instead
+     * of `function`, which used to become a bad execute and "function not
+     * found".
+     */
+    fun normalizeFunctionArgs(args: JSONObject): JSONObject {
+        val out = JSONObject()
+        val keys = args.keys()
+        while (keys.hasNext()) {
+            val key = keys.next().toString()
+            val value = args.opt(key)
+            if (value == null) out.put(key, JSONObject.NULL)
+            else out.put(key, value)
+        }
+
+        var pkg = out.optString("package")
+        var fn =
+            out.optString("function").ifEmpty {
+                out.optString("function_id").ifEmpty { out.optString("functionId") }
+            }
+
+        // Whole qualified id in function, or in package.
+        if (fn.contains('/')) {
+            val slash = fn.indexOf('/')
+            val left = fn.substring(0, slash)
+            val right = fn.substring(slash + 1)
+            if (right.isNotEmpty()) {
+                if (pkg.isEmpty() || pkg == left) pkg = left
+                fn = right
+            }
+        } else if (pkg.contains('/') && fn.isEmpty()) {
+            val slash = pkg.indexOf('/')
+            fn = pkg.substring(slash + 1)
+            pkg = pkg.substring(0, slash)
+        }
+
+        // package/foo when package is already set.
+        val prefix = "$pkg/"
+        if (pkg.isNotEmpty() && fn.startsWith(prefix)) {
+            fn = fn.substring(prefix.length)
+        }
+
+        out.put("package", pkg)
+        out.put("function", fn)
+        out.remove("function_id")
+        out.remove("functionId")
+        return out
+    }
+
     /** One line per function, sorted, so the prompt prefix is stable. */
     fun lines(list: JSONObject, max: Int = 200): List<String> {
         val functions = list.optJSONArray("functions") ?: return emptyList()
@@ -84,12 +136,15 @@ object FunctionCatalog {
 
     private fun line(f: JSONObject): String {
         val pkg = f.optString("package")
-        val id = f.optString("function_id")
+        var id = f.optString("function_id")
+        // AppSearch sometimes stores document.id as "package/function".
+        val prefix = "$pkg/"
+        if (pkg.isNotEmpty() && id.startsWith(prefix)) {
+            id = id.substring(prefix.length)
+        }
         val sb = StringBuilder()
-        sb.append(pkg).append('/').append(id)
+        sb.append("package=").append(pkg).append(" function=").append(id)
 
-        // The client writes description as a plain string; a flattening that
-        // left it as a single-element array is read the same way.
         val description = (unwrap(f.opt("description")) as? String)
             ?.let { InjectionFilter.oneLine(it, 160) }
             .orEmpty()

@@ -35,7 +35,7 @@ class PolicyEngine(
     apps: List<AppFacts>,
     private val excluded: Set<String>,
     /** Snapshotted from settings when the task started, never re-read. */
-    private val autonomous: Boolean,
+    private val autonomy: com.bestrom.agent.brain.AutonomyLevel,
     /**
      * The packages that can change a secure setting: Settings itself, and
      * whatever else on this device holds WRITE_SECURE_SETTINGS. Resolved once
@@ -147,6 +147,28 @@ class PolicyEngine(
                 "install unknown apps",
             )
 
+        /**
+         * Checkout / pay controls on any app. Always confirm — never Allow all,
+         * never skipped by autonomy. Phrase match on the tapped element's
+         * label and res id.
+         */
+        val CHECKOUT_UI_PARTS: List<String> =
+            listOf(
+                "checkout",
+                "place order",
+                "place your order",
+                "buy now",
+                "pay now",
+                "confirm purchase",
+                "confirm and pay",
+                "complete purchase",
+                "submit order",
+                "pay with",
+                "add card",
+                "enter cvv",
+                "cvv",
+            )
+
         /** How long a one-word app label has to be before the goal can name it. */
         const val MIN_LABEL_CHARS = 6
 
@@ -157,9 +179,10 @@ class PolicyEngine(
          * Packages that handle money or credentials.
          *
          * A name list is not a taxonomy and it will miss a bank. It is the
-         * backstop: the two tests that read the APK - billing and tap-to-pay -
-         * are the load-bearing ones, and the Excluded apps list is the user's
-         * own answer for anything all three miss.
+         * backstop: tap-to-pay (HCE) on the APK is the load-bearing APK test,
+         * checkout UI phrases catch place-order on ordinary shops, and the
+         * Excluded apps list is the user's answer for anything those miss.
+         * Billing alone is not enough - half the Play Store requests it.
          */
         val SENSITIVE_PREFIXES: List<String> =
             listOf(
@@ -224,9 +247,9 @@ class PolicyEngine(
     /** Settings, and anything else that can write a secure setting. */
     private val settingsSurfaces: Set<String> = settingsPackages + SETTINGS
 
-    /** Computed once, from properties of the APK and then from the name list. */
+    /** Computed once, from HCE on the APK and then from the name list. */
     val sensitive: Set<String> =
-        apps.filter { it.billing || it.hce || matchesPrefix(it.packageName) }
+        apps.filter { it.hce || matchesPrefix(it.packageName) }
             .map { it.packageName }
             .toSet()
 
@@ -286,9 +309,16 @@ class PolicyEngine(
         if (tier == Tier.READ) return Decision.Allow
         val what = describe(call, screen)
         if (tier == Tier.ALWAYS_CONFIRM) {
+            if (autonomy.bypassesConfirms()) return Decision.Allow
+            val target = targetPackage(call, screen)
+            val sensitiveConfirm =
+                isSensitive(target) || isCheckoutControl(call, screen)
+            if (autonomy.skipsNonSensitiveConfirm() && !sensitiveConfirm) {
+                return Decision.Allow
+            }
             return Decision.NeedsConfirm(what.first, what.second, true)
         }
-        if (autonomous || allowAllForThisTask) return Decision.Allow
+        if (autonomy.skipsMutateConfirm() || allowAllForThisTask) return Decision.Allow
         return Decision.NeedsConfirm(what.first, what.second, false)
     }
 
@@ -298,10 +328,17 @@ class PolicyEngine(
         if (!call.tool.mutating) return Tier.READ
         val target = targetPackage(call, screen)
         if (isSensitive(target)) return Tier.ALWAYS_CONFIRM
-        // A screen that can change a secure setting asks every time. Neither
-        // Autonomous nor Allow all covers it, because the rows the agent must
-        // never touch are two taps from most of them.
-        if (target != null && settingsSurfaces.contains(target)) return Tier.ALWAYS_CONFIRM
+        // call_function against a settings surface writes state the UI rows
+        // only point at, so it asks every time. UI gestures and launch_app
+        // follow MUTATE at Task+; forbiddenRow still refuses lock / developer
+        // / accessibility / wipe rows two taps away.
+        if (target != null &&
+            settingsSurfaces.contains(target) &&
+            call.name == ToolSchema.CALL_FUNCTION
+        ) {
+            return Tier.ALWAYS_CONFIRM
+        }
+        if (isCheckoutControl(call, screen)) return Tier.ALWAYS_CONFIRM
         return Tier.MUTATE
     }
 
@@ -321,6 +358,12 @@ class PolicyEngine(
 
     /** null when nothing is refused; otherwise the sentence saying why. */
     private fun forbidden(call: ToolSchema.ToolCall, screen: ScreenDigest.Digest?): String? {
+        val min = ToolSchema.minAutonomy(call.name)
+        if (min != null && !autonomy.atLeast(min)) {
+            return "${call.name} needs ${min.name} autonomy or higher in Brain settings " +
+                "(now ${autonomy.name})"
+        }
+
         val target = targetPackage(call, screen)
 
         // The dispatcher refuses an excluded package too. Refusing here as well
@@ -364,6 +407,27 @@ class PolicyEngine(
         val row = forbiddenRow(call, screen)
         if (row != null) return "\"$row\" is a setting the agent never changes"
         return null
+    }
+
+    /**
+     * Place-order / pay controls on shop apps. Same confirm floor as wallets:
+     * sensitive sheet, no Allow all. Billing on the APK alone does not mark
+     * the whole app sensitive.
+     */
+    private fun isCheckoutControl(
+        call: ToolSchema.ToolCall,
+        screen: ScreenDigest.Digest?,
+    ): Boolean {
+        if (call.name != ToolSchema.TAP && call.name != ToolSchema.LONG_PRESS) {
+            return false
+        }
+        if (screen == null || !call.args.has("node_id")) return false
+        val node = screen.node(call.args.optInt("node_id")) ?: return false
+        val text = (node.label + " " + node.resId).lowercase()
+        for (phrase in CHECKOUT_UI_PARTS) {
+            if (text.contains(phrase)) return true
+        }
+        return false
     }
 
     /**
@@ -467,6 +531,32 @@ class PolicyEngine(
                 ToolSchema.CALL_FUNCTION ->
                     "Call " + call.args.optString("function") + " in " +
                         label(call.args.optString("package"))
+                ToolSchema.SCHEDULE_REMINDER ->
+                    "Schedule reminder: " + call.args.optString("message").take(80)
+                ToolSchema.SCHEDULE_TASK ->
+                    "Schedule task: " + call.args.optString("goal").take(80)
+                ToolSchema.CANCEL_REMINDER -> "Cancel reminder " + call.args.optString("id")
+                ToolSchema.LOG_TAIL, ToolSchema.LOG_GREP, ToolSchema.CRASH_SCAN,
+                ToolSchema.BATTERYSTATS_SNIPPET ->
+                    "Read diagnostics: " + call.name
+                ToolSchema.MEASURE_IDLE_DRAIN -> "Sample battery / idle drain"
+                ToolSchema.START_JOB ->
+                    "Start background job: " + call.args.optString("kind")
+                ToolSchema.STOP_JOB -> "Stop job " + call.args.optString("id")
+                ToolSchema.SAVE_MACRO ->
+                    "Save macro: " + call.args.optString("name").take(80)
+                ToolSchema.DELETE_MACRO -> "Delete macro " + call.args.optString("id")
+                ToolSchema.RUN_MACRO -> "Run macro " + call.args.optString("id")
+                ToolSchema.LIST_PLAYBOOKS -> "List playbooks"
+                ToolSchema.RUN_PLAYBOOK ->
+                    "Run playbook " + call.args.optString("id")
+                ToolSchema.CREATE_MINIAPP ->
+                    "Create mini app: " + call.args.optString("name").take(80)
+                ToolSchema.LIST_MINIAPPS -> "List mini apps"
+                ToolSchema.DELETE_MINIAPP ->
+                    "Delete mini app " + call.args.optString("id")
+                ToolSchema.OPEN_MINIAPP ->
+                    "Open mini app " + call.args.optString("id")
                 else -> call.name
             }
 

@@ -33,6 +33,7 @@ import com.bestrom.agent.Denylist
 import com.bestrom.agent.a11y.Actions
 import com.bestrom.agent.a11y.TreeSerializer
 import com.bestrom.agent.audit.AuditLog
+import com.bestrom.agent.runner.FunctionCatalog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -443,8 +444,9 @@ object Methods {
     }
 
     private fun functionsExecute(host: Host, session: Session, params: JSONObject): JSONObject {
-        val pkg = params.optString("package")
-        val function = params.optString("function")
+        val normalized = FunctionCatalog.normalizeFunctionArgs(params)
+        val pkg = normalized.optString("package")
+        val function = normalized.optString("function")
         if (pkg.isEmpty() || function.isEmpty()) {
             throw JsonRpc.RpcException(JsonRpc.INVALID_PARAMS, "package and function are required")
         }
@@ -452,8 +454,8 @@ object Methods {
             throw JsonRpc.RpcException(JsonRpc.NOT_INSTALLED, "no such package")
         }
         refuseDenied(host, pkg)
-        val timeout = params.optLong("timeout_ms", 30000L).coerceIn(1L, 120000L)
-        val callParams = params.optJSONObject("params") ?: JSONObject()
+        val timeout = normalized.optLong("timeout_ms", 30000L).coerceIn(1L, 120000L)
+        val callParams = normalized.optJSONObject("params") ?: JSONObject()
 
         val outcome = host.functions.execute(pkg, function, callParams, timeout)
         if (outcome.timedOut) {
@@ -773,6 +775,9 @@ object Methods {
         }
 
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Prefer a side-by-side pane when the agent chat is already multi-window /
+        // PiP, so launch_app does not fully bury the task UI.
+        intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
         val resolved =
             intent.resolveActivity(pm)
                 ?: throw JsonRpc.RpcException(JsonRpc.ACTION_FAILED, "nothing resolves that intent")
@@ -780,9 +785,17 @@ object Methods {
         // so the exclusion is checked against what the platform actually
         // resolved rather than against what the caller wrote.
         refuseDenied(host, resolved.packageName)
+        // Ask the chat activity to shrink to PiP before this covers it.
+        com.bestrom.agent.AgentState.keepVisible.set(true)
+        try {
+            Thread.sleep(250)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
         try {
             host.context.startActivity(intent)
         } catch (e: Exception) {
+            com.bestrom.agent.AgentState.keepVisible.set(false)
             throw JsonRpc.RpcException(JsonRpc.ACTION_FAILED, "the activity did not start")
         }
         return JSONObject().put("ok", true).put("component", resolved.flattenToString())

@@ -30,6 +30,7 @@ import android.net.LocalSocket
 import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
+import com.bestrom.agent.AgentPrefs
 import com.bestrom.agent.AgentState
 import com.bestrom.agent.R
 import com.bestrom.agent.audit.AuditLog
@@ -49,19 +50,15 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONObject
 
 /**
- * The bridge: a unix abstract socket speaking newline-delimited JSON-RPC.
+ * On-device agent host, and optionally the adb JSON-RPC bridge.
  *
- * It is a foreground service on purpose. Agent mode is never invisible: an
- * ongoing notification is up for the whole session, it carries a Stop action,
- * and the socket lives exactly as long as the service does. Nothing here is
- * reachable from the network - the socket has no address outside the device and
- * the app holds no INTERNET permission.
+ * Agent mode itself does not need a cable or adb. Chat and tool calls go through
+ * Accessibility. The unix abstract socket (`localabstract:bestrom_agent`) is
+ * only bound when [AgentPrefs.remoteAdb] is on, for a computer that forwards
+ * over adb.
  *
- * On the device the socket is not adbd-only. sepolicy lets any process in the
- * same domain connect to it, and this app runs in platform_app, so every other
- * platform-signed app can reach it. What makes it adbd-only is the peer
- * credential check in [serve]: a connection whose uid is neither shell nor root
- * is closed before its first line is read.
+ * It is a foreground service on purpose: an ongoing notification is up for the
+ * whole session and carries Stop. Nothing here is reachable from the network.
  */
 class AgentBridgeService : Service(), Methods.Host {
 
@@ -140,7 +137,9 @@ class AgentBridgeService : Service(), Methods.Host {
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_NEW_CODE) {
-            if (running.get()) regenerateCode()
+            if (running.get() && AgentPrefs.remoteAdb(this) && server != null) {
+                regenerateCode()
+            }
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_STOP_TASK) {
@@ -150,41 +149,50 @@ class AgentBridgeService : Service(), Methods.Host {
         if (running.get()) return START_NOT_STICKY
 
         createChannel()
+        val remote = AgentPrefs.remoteAdb(this)
         startForeground(
             NOTIFICATION_ID,
-            buildNotification(getString(R.string.notification_text)),
+            buildNotification(
+                getString(
+                    if (remote) R.string.notification_text
+                    else R.string.notification_text_native
+                ),
+            ),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
         )
 
-        val socket =
-            try {
-                LocalServerSocket(SOCKET_NAME)
-            } catch (e: Exception) {
-                Log.e(TAG, "cannot bind the agent socket")
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-                return START_NOT_STICKY
-            }
-        server = socket
         running.set(true)
-        // The screen renders whatever this publishes, so a rotation from any
-        // source - the button, or three wrong codes on the wire - reaches it.
-        auth.setCodeListener { code, cooldownUntilMs ->
-            AgentState.pairingCode = code.ifEmpty { null }
-            AgentState.pairingCooldownUntilMs = cooldownUntilMs
-        }
-        auth.start(System.currentTimeMillis())
         AgentState.paired.set(false)
         lastRequestMs.set(SystemClock.uptimeMillis())
-        // Only now is the bridge live; the accessibility component is enabled
-        // after this flag is set, never before.
+        // Live before a11y is enabled (see AgentToggle). Chat and tools need
+        // this flag; the adb socket is optional.
         AgentState.bridgeLive.set(true)
-        // Published so the runner can reach the same dispatcher host the adb
-        // bridge uses. Cleared in shutdown, so nothing holds it while off.
         AgentState.bridge = this
 
-        acceptThread = Thread({ acceptLoop(socket) }, "agent-accept").also { it.start() }
-        idleThread = Thread(::idleLoop, "agent-idle").also { it.start() }
+        if (remote) {
+            val socket =
+                try {
+                    LocalServerSocket(SOCKET_NAME)
+                } catch (e: Exception) {
+                    Log.e(TAG, "cannot bind the agent socket", e)
+                    // Native chat still works; remote just did not come up.
+                    AgentState.pairingCode = null
+                    return START_NOT_STICKY
+                }
+            server = socket
+            auth.setCodeListener { code, cooldownUntilMs ->
+                AgentState.pairingCode = code.ifEmpty { null }
+                AgentState.pairingCooldownUntilMs = cooldownUntilMs
+            }
+            auth.start(System.currentTimeMillis())
+            acceptThread = Thread({ acceptLoop(socket) }, "agent-accept").also { it.start() }
+            idleThread = Thread(::idleLoop, "agent-idle").also { it.start() }
+        } else {
+            // No pairing code and no idle kill: on-device use stays up until
+            // the user turns Agent mode off.
+            AgentState.pairingCode = null
+            AgentState.pairingCooldownUntilMs = 0
+        }
         return START_NOT_STICKY
     }
 
@@ -235,11 +243,13 @@ class AgentBridgeService : Service(), Methods.Host {
         val config = BrainPrefs.read(this)
         if (!config.configured()) return getString(R.string.task_no_brain)
 
+        noteRequest()
+
         val task =
             Task(
                 java.util.UUID.randomUUID().toString(),
                 text,
-                config.autonomous,
+                config.autonomy,
                 config.stepCap,
                 config.tokenCap,
                 config.sendScreenshots(),
@@ -264,6 +274,7 @@ class AgentBridgeService : Service(), Methods.Host {
         AgentState.keepEndingOnly()
         AgentState.task = null
         AgentState.confirm = null
+        AgentState.choice = null
         runner = null
         taskThread = null
         if (running.get()) updateNotification(getString(R.string.notification_text))

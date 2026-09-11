@@ -33,6 +33,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.bestrom.agent.AgentPrefs
+import com.bestrom.agent.AgentReset
 import com.bestrom.agent.AgentState
 import com.bestrom.agent.Denylist
 import com.bestrom.agent.R
@@ -57,6 +59,7 @@ class AgentSettingsActivity : Activity() {
     private lateinit var adapter: AuditAdapter
 
     private lateinit var masterSwitch: Switch
+    private lateinit var remoteAdbSwitch: Switch
     private lateinit var statusBridge: TextView
     private lateinit var statusA11y: TextView
     private lateinit var statusSession: TextView
@@ -87,14 +90,14 @@ class AgentSettingsActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_agent_settings)
-        setTitle(R.string.agent_title)
-        actionBar?.setDisplayHomeAsUpEnabled(true)
+        findViewById<View>(R.id.btn_back).setOnClickListener { finish() }
 
         toggle = AgentToggle(applicationContext)
         audit = AuditLog.get(filesDir)
         adapter = AuditAdapter()
 
         masterSwitch = findViewById(R.id.master_switch)
+        remoteAdbSwitch = findViewById(R.id.remote_adb_switch)
         statusBridge = findViewById(R.id.status_bridge)
         statusA11y = findViewById(R.id.status_a11y)
         statusSession = findViewById(R.id.status_session)
@@ -119,6 +122,33 @@ class AgentSettingsActivity : Activity() {
             if (checked) turnOn() else turnOff()
         }
 
+        remoteAdbSwitch.isChecked = AgentPrefs.remoteAdb(this)
+        remoteAdbSwitch.setOnCheckedChangeListener { button: CompoundButton, checked: Boolean ->
+            if (busy || !button.isPressed) return@setOnCheckedChangeListener
+            AgentPrefs.setRemoteAdb(this, checked)
+            // Socket bind happens at service start; bounce if Agent mode is on.
+            if (AgentState.bridgeLive.get()) {
+                busy = true
+                masterSwitch.isEnabled = false
+                remoteAdbSwitch.isEnabled = false
+                worker.execute {
+                    toggle.turnOff()
+                    val result = toggle.turnOn()
+                    main.post {
+                        busy = false
+                        masterSwitch.isEnabled = true
+                        remoteAdbSwitch.isEnabled = true
+                        if (result != AgentToggle.Result.ON) {
+                            Toast.makeText(this, R.string.bridge_failed, Toast.LENGTH_LONG).show()
+                        }
+                        render()
+                    }
+                }
+            } else {
+                render()
+            }
+        }
+
         findViewById<Button>(R.id.new_code).setOnClickListener {
             startService(
                 Intent(this, AgentBridgeService::class.java)
@@ -136,6 +166,37 @@ class AgentSettingsActivity : Activity() {
 
         clearButton.setOnClickListener { confirmClear() }
         findViewById<Button>(R.id.excluded_edit).setOnClickListener { editExcluded() }
+
+        val securitySwitch = findViewById<Switch>(R.id.security_watch_switch)
+        securitySwitch.isChecked = AgentPrefs.securityWatch(this)
+        securitySwitch.setOnCheckedChangeListener { button, checked ->
+            if (!button.isPressed) return@setOnCheckedChangeListener
+            AgentPrefs.setSecurityWatch(this, checked)
+            com.bestrom.agent.security.SettingsWatch.sync(this)
+        }
+
+        findViewById<View>(R.id.alert_delivery_row).setOnClickListener { pickAlertDelivery() }
+        findViewById<Button>(R.id.reset_agent).setOnClickListener { confirmReset() }
+
+        val waterSwitch = findViewById<Switch>(R.id.water_switch)
+        waterSwitch.isChecked = AgentPrefs.waterEnabled(this)
+        waterSwitch.setOnCheckedChangeListener { button, checked ->
+            if (!button.isPressed) return@setOnCheckedChangeListener
+            AgentPrefs.setWaterEnabled(this, checked)
+        }
+        findViewById<Button>(R.id.water_open).setOnClickListener {
+            startActivity(Intent(this, com.bestrom.agent.miniapps.WaterTrackerActivity::class.java))
+        }
+        val weightSwitch = findViewById<Switch>(R.id.weight_switch)
+        weightSwitch.isChecked = AgentPrefs.weightEnabled(this)
+        weightSwitch.setOnCheckedChangeListener { button, checked ->
+            if (!button.isPressed) return@setOnCheckedChangeListener
+            AgentPrefs.setWeightEnabled(this, checked)
+        }
+        findViewById<Button>(R.id.weight_open).setOnClickListener {
+            startActivity(Intent(this, com.bestrom.agent.miniapps.WeightTrackerActivity::class.java))
+        }
+        refreshRecipeList()
     }
 
     override fun onResume() {
@@ -145,6 +206,7 @@ class AgentSettingsActivity : Activity() {
         if (!AgentState.bridgeLive.get()) {
             worker.execute { toggle.reconcileOff() }
         }
+        refreshRecipeList()
         main.post(refresh)
     }
 
@@ -208,6 +270,90 @@ class AgentSettingsActivity : Activity() {
         if (requestCode == 1 && toggle.hasNotificationPermission()) turnOn()
     }
 
+    private fun pickAlertDelivery() {
+        val modes =
+            arrayOf(
+                com.bestrom.agent.alert.AlertDelivery.NOTIFICATION,
+                com.bestrom.agent.alert.AlertDelivery.TOAST,
+                com.bestrom.agent.alert.AlertDelivery.DIALOG,
+            )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.alert_delivery_label)
+            .setItems(modes) { _, which ->
+                AgentPrefs.setAlertDelivery(this, modes[which])
+                render()
+            }
+            .show()
+    }
+
+    private fun refreshRecipeList() {
+        val list = findViewById<LinearLayout>(R.id.recipe_list) ?: return
+        val empty = findViewById<TextView>(R.id.recipe_list_empty)
+        list.removeAllViews()
+        val recipes = com.bestrom.agent.miniapps.MiniAppRecipeStore(this).list()
+        empty?.visibility = if (recipes.isEmpty()) View.VISIBLE else View.GONE
+        for (r in recipes) {
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.gravity = android.view.Gravity.CENTER_VERTICAL
+            val label = TextView(this)
+            label.layoutParams =
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            label.text = r.name + " · " + r.kind
+            label.setTextColor(getColor(R.color.agent_on_surface))
+            label.textSize = 16f
+            val open = Button(this, null, android.R.attr.borderlessButtonStyle)
+            open.text = getString(R.string.miniapp_open)
+            open.setTextColor(getColor(R.color.agent_accent))
+            open.isAllCaps = false
+            open.setOnClickListener {
+                startActivity(
+                    Intent(this, com.bestrom.agent.miniapps.RecipeMiniAppActivity::class.java)
+                        .putExtra(com.bestrom.agent.miniapps.RecipeMiniAppActivity.EXTRA_ID, r.id)
+                )
+            }
+            val del = Button(this, null, android.R.attr.borderlessButtonStyle)
+            del.text = getString(R.string.miniapp_delete)
+            del.setTextColor(getColor(R.color.agent_accent))
+            del.isAllCaps = false
+            del.setOnClickListener {
+                AlertDialog.Builder(this)
+                    .setMessage(getString(R.string.miniapp_delete_confirm, r.name))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(R.string.miniapp_delete) { _, _ ->
+                        com.bestrom.agent.miniapps.MiniAppRecipeStore(this).remove(r.id)
+                        com.bestrom.agent.miniapps.MiniAppRuntimeStore(this).delete(r.id)
+                        refreshRecipeList()
+                    }
+                    .show()
+            }
+            row.addView(label)
+            row.addView(open)
+            row.addView(del)
+            list.addView(row)
+        }
+    }
+
+    private fun confirmReset() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.reset_agent_label)
+            .setMessage(R.string.reset_agent_confirm)
+            .setNeutralButton(R.string.reset_keep_key) { _, _ ->
+                val msg = AgentReset.resetAgentData(this, wipeApiKey = false)
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                refreshRecipeList()
+                render()
+            }
+            .setPositiveButton(R.string.reset_wipe_key) { _, _ ->
+                val msg = AgentReset.resetAgentData(this, wipeApiKey = true)
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                refreshRecipeList()
+                render()
+            }
+            .setNegativeButton(R.string.activity_clear_cancel, null)
+            .show()
+    }
+
     private fun confirmClear() {
         val total = audit.size()
         AlertDialog.Builder(this)
@@ -250,9 +396,17 @@ class AgentSettingsActivity : Activity() {
 
     private fun render() {
         val on = AgentState.bridgeLive.get()
+        val remote = AgentPrefs.remoteAdb(this)
         if (masterSwitch.isChecked != on && !busy) masterSwitch.isChecked = on
+        if (remoteAdbSwitch.isChecked != remote && !busy) remoteAdbSwitch.isChecked = remote
 
-        statusBridge.setText(if (on) R.string.status_bridge_on else R.string.status_bridge_off)
+        statusBridge.setText(
+            when {
+                !on -> R.string.status_bridge_off
+                remote -> R.string.status_bridge_remote
+                else -> R.string.status_bridge_on
+            }
+        )
         statusA11y.setText(
             if (toggle.accessibilityConnected()) R.string.status_a11y_on
             else R.string.status_a11y_off
@@ -261,6 +415,8 @@ class AgentSettingsActivity : Activity() {
             if (AgentState.paired.get()) R.string.status_session_paired
             else R.string.status_session_none
         )
+        statusSession.visibility = if (remote) View.VISIBLE else View.GONE
+        statusRefused.visibility = if (remote) View.VISIBLE else View.GONE
 
         val peerRefusals = AgentState.peerRefusals.get()
         val preAuthRefusals = AgentState.preAuthRefusals.get()
@@ -268,10 +424,9 @@ class AgentSettingsActivity : Activity() {
             if (peerRefusals == 0 && preAuthRefusals == 0) getString(R.string.status_refused_none)
             else getString(R.string.status_refused, peerRefusals, preAuthRefusals)
 
-        // A code pairs once. With none live the group stays up, because New
-        // code inside it is the only way to pair again.
+        // Pairing is only for the optional adb socket.
         val code = AgentState.pairingCode
-        if (on) {
+        if (on && remote) {
             pairingGroup.visibility = View.VISIBLE
             if (code.isNullOrEmpty()) {
                 pairingCode.visibility = View.GONE
@@ -304,6 +459,9 @@ class AgentSettingsActivity : Activity() {
         excludedSummary.text =
             if (excluded.isEmpty()) getString(R.string.excluded_none)
             else getString(R.string.excluded_count, excluded.size) + "  " + excluded.joinToString(", ")
+
+        findViewById<TextView>(R.id.alert_delivery_summary).text =
+            getString(R.string.alert_delivery_summary, AgentPrefs.alertDelivery(this))
 
         val entries = audit.list(AuditLog.CAPACITY)
         adapter.submit(entries)
