@@ -26,9 +26,10 @@ android_library {
         "api/src/com/bestrom/agent/health/BestromHealthClient.kt",
     ],
 
-    // Shared with Dialer (product) and Launcher / Agent (system_ext).
+    // Shared with Dialer, Launcher, DocumentsUI (min 30/31) and Agent.
+    // Must stay at or below the lowest consumer; "current" breaks DocumentsUI.
     platform_apis: true,
-    min_sdk_version: "current",
+    min_sdk_version: "30",
     target_sdk_version: "current",
 
     static_libs: [
