@@ -26,6 +26,9 @@ android_library {
         "api/src/com/bestrom/agent/health/BestromHealthClient.kt",
     ],
 
+    // Library-only stub — do not pick up the app AndroidManifest.xml.
+    manifest: "api/AndroidManifest.xml",
+
     // Shared with Dialer, DocumentsUI-lib, Launcher and Agent. Those compile
     // against system_current; platform_apis here would make Soong refuse the
     // Dialer link. The client only needs Binder + public Context APIs.
