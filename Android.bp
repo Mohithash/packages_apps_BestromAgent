@@ -26,9 +26,10 @@ android_library {
         "api/src/com/bestrom/agent/health/BestromHealthClient.kt",
     ],
 
-    // Shared with Dialer, Launcher, DocumentsUI (min 30/31) and Agent.
-    // Must stay at or below the lowest consumer; "current" breaks DocumentsUI.
-    platform_apis: true,
+    // Shared with Dialer, DocumentsUI-lib, Launcher and Agent. Those compile
+    // against system_current; platform_apis here would make Soong refuse the
+    // Dialer link. The client only needs Binder + public Context APIs.
+    sdk_version: "system_current",
     min_sdk_version: "30",
     target_sdk_version: "current",
 
