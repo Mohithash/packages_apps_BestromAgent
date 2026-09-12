@@ -20,10 +20,13 @@ feature is gated on the key rotation, not on this code.
   still a unix abstract socket with no address outside the device. `INTERNET`
   is held by exactly one class, `brain/OpenAiCompatClient`, which builds one
   URL and no other; a verify gate asserts the dex carries the platform HTTP
-  stack and carries no vendored one.
-* Not resident. Both services ship `android:enabled="false"`, there is no
-  receiver, job, provider or notification listener, and Agent mode does not
-  survive a reboot. With the switch off the app is an APK on disk.
+  stack and carries no vendored one. Other BestROM apps that need the model
+  bind `BrainProxyService` (permission `USE_BRAIN`) and call `complete()` —
+  they never receive the API key.
+* Not resident for Agent mode. The adb bridge and accessibility service ship
+  `android:enabled="false"` until the switch is on. `BrainProxyService` stays
+  enabled so Launcher can ask the brain without turning Agent mode on. With
+  Agent mode off and no brain calls, the cost is still idle.
 * Not a confused deputy for `app.launch`. `Intent.parseUri` also accepts
   extras, categories and flags; only the action, data, component and package
   survive, the flags start at zero, and `FLAG_ACTIVITY_NEW_TASK` is the only
@@ -400,3 +403,27 @@ and neither is anything that was on screen.
 The step lines the task screen shows are cleared when the task ends - only the
 ending line stays, because it is the answer - and the window sets `FLAG_SECURE`,
 so what the agent read is not in the Recents snapshot either.
+
+## Shared brain for other apps
+
+The API key is **not** a Settings.Global or world-readable value. Apps that need
+AI call BestromAgent instead:
+
+1. Declare `com.bestrom.agent.permission.USE_BRAIN` (signature|privileged; platform-signed BestROM apps get it).
+2. `static_libs: ["BestromBrainApi"]` in the app's `Android.bp`.
+3. Bind and complete:
+
+```kotlin
+val brain = BestromBrainClient(context)
+if (brain.bind() && brain.isReady()) {
+    val result = brain.complete("Short answers only.", "Summarise this: …")
+    if (result?.getBoolean(BrainProxyContract.KEY_OK) == true) {
+        val text = result.getString(BrainProxyContract.KEY_TEXT)
+    }
+}
+brain.unbind()
+```
+
+`getStatus()` reports configured / locked / model / preset. There is no method
+that returns the key. Completions are rate-limited per calling UID and refused
+while the device is locked.

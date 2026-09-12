@@ -18,6 +18,8 @@
     <string name="app_name">BestROM Agent</string>
     <string name="agent_title">Agent</string>
     <string name="agent_subtitle">Control plane</string>
+    <string name="perm_use_brain_label">Use BestROM brain</string>
+    <string name="perm_use_brain_description">Allow this app to ask BestROM Agent for AI completions using the key you configured. The key itself is never shared.</string>
     <string name="nav_back">Back</string>
     <string name="section_power">Power</string>
     <string name="section_workspace">Workspace</string>

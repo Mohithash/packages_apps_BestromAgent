@@ -20,9 +20,10 @@
   Both services ship android:enabled="false": with the switch off,
   AccessibilityManagerService never scans this app and nothing binds it. The
   settings activity is enabled because it is the door - an activity nobody
-  starts costs nothing, holds no binding and starts no process. There is
-  deliberately no JobService, no NotificationListenerService and no
-  <provider> anywhere in this file.   The receivers are ReminderReceiver (local reminders) and BackgroundReceiver
+  starts costs nothing, holds no binding and starts no process.   There is deliberately no JobService, no NotificationListenerService and no
+  <provider> anywhere in this file. BrainProxyService is exported under
+  USE_BRAIN so other BestROM apps can share the sealed brain key without
+  reading it. The receivers are ReminderReceiver (local reminders) and BackgroundReceiver
   (jobs + macros). Neither turns Agent mode on.
 
   INTERNET is here for exactly one class, brain/OpenAiCompatClient. It is a
@@ -54,12 +55,25 @@
     <!-- normal / signature, no allowlist entry -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      Shared brain for platform-signed BestROM apps (Launcher, Dialer, …).
+      Signature|privileged: same cert as BestromAgent, or privapp allowlisted.
+      The key itself is never exported — only status + complete().
+    -->
+    <permission
+        android:name="com.bestrom.agent.permission.USE_BRAIN"
+        android:protectionLevel="signature|privileged"
+        android:label="@string/perm_use_brain_label"
+        android:description="@string/perm_use_brain_description" />
 
     <application
         android:allowBackup="false"
@@ -192,6 +206,30 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Local agent bridge, running only while Agent mode is on" />
+        </service>
+
+        <!--
+             Shared brain for other BestROM apps. Always enabled; does not turn
+             Agent mode on. Callers need USE_BRAIN. Never returns the API key.
+        -->
+        <service
+            android:name=".brain.BrainProxyService"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="com.bestrom.agent.permission.USE_BRAIN">
+            <intent-filter>
+                <action android:name="com.bestrom.agent.action.BRAIN_PROXY" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".health.HealthProxyService"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="com.bestrom.agent.permission.USE_BRAIN">
+            <intent-filter>
+                <action android:name="com.bestrom.agent.action.HEALTH_PROXY" />
+            </intent-filter>
         </service>
 
         <service

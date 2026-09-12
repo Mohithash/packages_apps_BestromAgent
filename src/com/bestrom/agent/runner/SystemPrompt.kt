@@ -46,6 +46,7 @@ object SystemPrompt {
         - Use wait when the screen is still loading, then read_screen again.
         - If an action does not change the screen, do not repeat it. Try a different element, swipe to scroll, or go back with key.
         - schedule_reminder for a local notification later (in_minutes or at_unix_ms). schedule_task to run a goal later if Agent mode is still on; otherwise it notifies the user.
+        - schedule_event to put a confirmed appointment on the primary calendar (title, start_epoch_ms, optional duration_min and remind_min).
         - list_reminders / cancel_reminder manage pending schedules. Max 32. They re-arm after reboot.
         - At Background autonomy or higher: measure_idle_drain for a battery snapshot; call twice (idle, screen off) for a delta. Not full batterystats.
         - start_job / stop_job / list_jobs for repeating idle_drain or error_watch (Background+). Never turns Agent mode on.

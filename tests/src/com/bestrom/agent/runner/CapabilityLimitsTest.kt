@@ -63,6 +63,7 @@ class CapabilityLimitsTest {
     fun promptAllowsSchedulesAndMaintainerLogs() {
         val prompt = SystemPrompt.INSTRUCTIONS
         assertTrue(prompt.contains("schedule_reminder"))
+        assertTrue(prompt.contains("schedule_event"))
         assertTrue(prompt.contains("schedule_task"))
         assertTrue(prompt.contains("log_tail"))
         assertTrue(prompt.contains("measure_idle_drain"))

@@ -53,6 +53,7 @@ object ToolSchema {
     const val DONE = "done"
     const val SCHEDULE_REMINDER = "schedule_reminder"
     const val SCHEDULE_TASK = "schedule_task"
+    const val SCHEDULE_EVENT = "schedule_event"
     const val LIST_REMINDERS = "list_reminders"
     const val CANCEL_REMINDER = "cancel_reminder"
     const val LOG_TAIL = "log_tail"
@@ -296,6 +297,32 @@ object ToolSchema {
                         maximum = 43200,
                     ),
                     Param("at_unix_ms", "integer", false, "Or an absolute unix time in ms."),
+                ),
+            ),
+            Tool(
+                SCHEDULE_EVENT,
+                "",
+                true,
+                "Insert a calendar event on the primary calendar (after the user confirmed).",
+                listOf(
+                    Param("title", "string", true, "Event title."),
+                    Param("start_epoch_ms", "integer", true, "Start time as unix ms."),
+                    Param(
+                        "duration_min",
+                        "integer",
+                        false,
+                        "Length in minutes (default 30).",
+                        minimum = 5,
+                        maximum = 1440,
+                    ),
+                    Param(
+                        "remind_min",
+                        "integer",
+                        false,
+                        "Reminder minutes before start (default 10).",
+                        minimum = 0,
+                        maximum = 1440,
+                    ),
                 ),
             ),
             Tool(
@@ -866,6 +893,10 @@ object ToolSchema {
                 val msg = com.bestrom.agent.schedule.ReminderTime.rejectText(args.optString("goal"))
                 if (msg != null) return msg.replace("message", "goal")
                 return com.bestrom.agent.schedule.ReminderTime.rejectWhen(args)
+            }
+            SCHEDULE_EVENT -> {
+                if (args.optString("title").trim().isEmpty()) return "title must not be empty"
+                if (args.optLong("start_epoch_ms", -1L) <= 0L) return "start_epoch_ms required"
             }
             CANCEL_REMINDER -> {
                 if (args.optString("id").isEmpty()) return "id must not be empty"

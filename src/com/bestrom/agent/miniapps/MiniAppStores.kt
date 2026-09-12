@@ -55,6 +55,41 @@ class WaterStore(private val file: File) {
         file.delete()
     }
 
+    /** Cups for a day key yyyy-MM-dd; 0 if none. */
+    @Synchronized
+    fun cupsForDay(day: String): Int = cupsFor(day)
+
+    /** Consecutive days ending today with at least one cup. */
+    @Synchronized
+    fun streakDays(): Int {
+        val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val cal = java.util.Calendar.getInstance()
+        var streak = 0
+        for (i in 0 until 365) {
+            val key = fmt.format(cal.time)
+            if (cupsFor(key) <= 0) break
+            streak++
+            cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+        }
+        return streak
+    }
+
+    /** Last [days] calendar days as day→cups (oldest first). */
+    @Synchronized
+    fun recentDays(days: Int): List<Pair<String, Int>> {
+        val n = days.coerceIn(1, 90)
+        val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val cal = java.util.Calendar.getInstance()
+        val out = ArrayList<Pair<String, Int>>(n)
+        cal.add(java.util.Calendar.DAY_OF_YEAR, -(n - 1))
+        for (i in 0 until n) {
+            val key = fmt.format(cal.time)
+            out.add(key to cupsFor(key))
+            cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        }
+        return out
+    }
+
     private fun cupsFor(day: String): Int = read()[day] ?: 0
 
     private fun todayKey(): String =
@@ -121,6 +156,18 @@ class WeightStore(private val file: File) {
     @Synchronized
     fun clear() {
         file.delete()
+    }
+
+    /** Up to [limit] newest entries, newest first. */
+    @Synchronized
+    fun recent(limit: Int): List<Entry> {
+        val n = limit.coerceIn(1, 90)
+        return read()
+            .entries
+            .filter { it.key != "_goal" }
+            .sortedByDescending { it.key }
+            .take(n)
+            .map { Entry(it.key, it.value) }
     }
 
     private fun read(): MutableMap<String, Float> {

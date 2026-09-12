@@ -103,6 +103,7 @@ class ToolSchemaTest {
                 "wait",
                 "schedule_reminder",
                 "schedule_task",
+                "schedule_event",
                 "list_reminders",
                 "cancel_reminder",
                 "log_tail",
@@ -245,6 +246,11 @@ class ToolSchemaTest {
                 valid(tool.name, """{"message":"Drink water","in_minutes":15}""")
             ToolSchema.SCHEDULE_TASK ->
                 valid(tool.name, """{"goal":"Turn on Wi-Fi","in_minutes":30}""")
+            ToolSchema.SCHEDULE_EVENT ->
+                valid(
+                    tool.name,
+                    """{"title":"Call back","start_epoch_ms":1893456000000,"duration_min":30,"remind_min":10}""",
+                )
             ToolSchema.LIST_REMINDERS -> valid(tool.name, "{}")
             ToolSchema.CANCEL_REMINDER -> valid(tool.name, """{"id":"abcd1234"}""")
             ToolSchema.LOG_TAIL -> valid(tool.name, """{"lines":80}""")

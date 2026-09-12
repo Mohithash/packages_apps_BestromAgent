@@ -535,6 +535,8 @@ class PolicyEngine(
                     "Schedule reminder: " + call.args.optString("message").take(80)
                 ToolSchema.SCHEDULE_TASK ->
                     "Schedule task: " + call.args.optString("goal").take(80)
+                ToolSchema.SCHEDULE_EVENT ->
+                    "Add calendar event: " + call.args.optString("title").take(80)
                 ToolSchema.CANCEL_REMINDER -> "Cancel reminder " + call.args.optString("id")
                 ToolSchema.LOG_TAIL, ToolSchema.LOG_GREP, ToolSchema.CRASH_SCAN,
                 ToolSchema.BATTERYSTATS_SNIPPET ->

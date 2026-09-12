@@ -836,6 +836,20 @@ class AgentRunner(
             return false
         }
 
+        if (call.name == ToolSchema.SCHEDULE_EVENT) {
+            transcript.addToolResult(
+                call.id,
+                boundary.envelope(
+                    call.name,
+                    "",
+                    "event id=" + result.optLong("event_id") + " uri=" + result.optString("uri"),
+                ),
+                false,
+            )
+            step(task.step, StepEvent.Kind.RESULT, call.name)
+            return false
+        }
+
         if (call.name == ToolSchema.LOG_TAIL ||
             call.name == ToolSchema.LOG_GREP ||
             call.name == ToolSchema.CRASH_SCAN ||

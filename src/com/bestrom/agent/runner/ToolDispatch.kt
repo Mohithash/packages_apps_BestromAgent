@@ -132,6 +132,9 @@ class ToolDispatch(private val host: Methods.Host) {
         ) {
             return com.bestrom.agent.schedule.ReminderTools.run(host.context, toolCall)
         }
+        if (toolCall.name == ToolSchema.SCHEDULE_EVENT) {
+            return com.bestrom.agent.schedule.CalendarEventTools.run(host.context, toolCall)
+        }
         if (toolCall.name == ToolSchema.LOG_TAIL ||
             toolCall.name == ToolSchema.LOG_GREP ||
             toolCall.name == ToolSchema.CRASH_SCAN

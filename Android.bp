@@ -14,6 +14,28 @@
 // limitations under the License.
 //
 
+android_library {
+    name: "BestromBrainApi",
+
+    srcs: [
+        "aidl/com/bestrom/agent/brain/IBrainProxy.aidl",
+        "aidl/com/bestrom/agent/health/IHealthProxy.aidl",
+        "api/src/com/bestrom/agent/brain/BrainProxyContract.kt",
+        "api/src/com/bestrom/agent/brain/BestromBrainClient.kt",
+        "api/src/com/bestrom/agent/health/HealthProxyContract.kt",
+        "api/src/com/bestrom/agent/health/BestromHealthClient.kt",
+    ],
+
+    // Shared with Dialer (product) and Launcher / Agent (system_ext).
+    platform_apis: true,
+    min_sdk_version: "current",
+    target_sdk_version: "current",
+
+    static_libs: [
+        "androidx.core_core-ktx",
+    ],
+}
+
 android_app {
     name: "BestromAgent",
 
@@ -33,6 +55,7 @@ android_app {
     system_ext_specific: true,
 
     static_libs: [
+        "BestromBrainApi",
         "androidx.core_core-ktx",
         "androidx.recyclerview_recyclerview",
     ],
