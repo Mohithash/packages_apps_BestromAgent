@@ -53,6 +53,7 @@ class BestromBrainClient(private val context: Context) {
         }
 
     /** Binds and waits up to [timeoutMs]. Returns false if the service never answered. */
+    @JvmOverloads
     fun bind(timeoutMs: Long = 5_000L): Boolean {
         if (proxy.get() != null) return true
         val intent =

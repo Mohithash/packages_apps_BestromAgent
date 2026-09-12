@@ -43,6 +43,7 @@ class BestromHealthClient(private val context: Context) {
             }
         }
 
+    @JvmOverloads
     fun bind(timeoutMs: Long = 5_000L): Boolean {
         if (proxy.get() != null) return true
         val intent =
@@ -63,8 +64,10 @@ class BestromHealthClient(private val context: Context) {
 
     fun status(): Bundle? = proxy.get()?.getStatus()
 
+    @JvmOverloads
     fun addWaterCup(cups: Int = 1): Bundle? = proxy.get()?.addWaterCup(cups)
 
+    @JvmOverloads
     fun scheduleEvent(
         title: String,
         startEpochMs: Long,
