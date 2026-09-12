@@ -78,7 +78,7 @@ class BestromBrainClient(private val context: Context) {
         proxy.set(null)
     }
 
-    fun status(): Bundle? = proxy.get()?.status()
+    fun status(): Bundle? = proxy.get()?.getStatus()
 
     fun complete(systemPrompt: String?, userMessage: String): Bundle? =
         proxy.get()?.complete(systemPrompt, userMessage)

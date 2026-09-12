@@ -61,7 +61,7 @@ class BestromHealthClient(private val context: Context) {
         proxy.set(null)
     }
 
-    fun status(): Bundle? = proxy.get()?.status()
+    fun status(): Bundle? = proxy.get()?.getStatus()
 
     fun addWaterCup(cups: Int = 1): Bundle? = proxy.get()?.addWaterCup(cups)
 
